@@ -315,6 +315,16 @@ export function detectDays(text: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+const lineWith = (text: string, re: RegExp) => linesWith(text, re)[0] ?? "";
+function linesWith(text: string, re: RegExp): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && re.test(l))
+    .map((l) => l.replace(/^[^:]{0,30}:\s*/, "").trim())
+    .slice(0, 4);
+}
+
 export const bids: ToolHandler = async (ctx) => {
   const files = ctx.files("bids");
   if (files.length < 2) throw new InputError("Nahrajte alespoň 2 nabídky.");
@@ -362,13 +372,13 @@ export const bids: ToolHandler = async (ctx) => {
           priceNumber: p ?? -1,
           duration: d === null ? "" : `${d} dní`,
           durationDays: d ?? -1,
-          warranty: /(\d{2,3})\s*měsíc/iu.exec(f.text)?.[0] ?? "",
-          technicalSolution: "",
-          materials: "",
-          exclusions: [] as string[],
-          deviations: [] as string[],
-          assumptions: [] as string[],
-          missing: [] as string[],
+          warranty: /(\d{2,3})\s*měsíc\w*/iu.exec(f.text)?.[0] ?? "",
+          technicalSolution: lineWith(f.text, /technick\w* řešení|plnění dle/iu),
+          materials: lineWith(f.text, /\bC\d{2}\/\d{2}\b|beton|ocel/iu),
+          exclusions: linesWith(f.text, /nezahrnuje|mimo předmět|není součástí|bez\s+(?:dodávky|montáže)/iu),
+          deviations: linesWith(f.text, /alternativ|odchyl|namísto|místo požadovan/iu),
+          assumptions: linesWith(f.text, /předpoklad|za podmínky|podmíněn/iu),
+          missing: [p === null ? "cena" : "", d === null ? "doba realizace" : "", /měsíc/iu.test(f.text) ? "" : "záruka"].filter(Boolean),
         };
       });
 
@@ -378,7 +388,6 @@ export const bids: ToolHandler = async (ctx) => {
   const maxDaysReq = /max\.?\s*(\d{2,4})\s*prac/iu.exec(ctx.value("criteria"))?.[1];
 
   const criteria: [string, (r: (typeof rows)[number]) => string][] = [
-    ["Uchazeč", (r) => r.bidder],
     ["Cena", (r) => `${r.price || "—"}${r.priceNumber > 0 && minPrice ? (r.priceNumber === minPrice ? "  ▼ nejnižší" : `  (+${formatCz(Math.round(((r.priceNumber - minPrice) / minPrice) * 1000) / 10)} %)`) : ""}`],
     ["Doba realizace", (r) => `${r.duration || "—"}${r.durationDays > 0 && minDays === r.durationDays ? "  ▼ nejkratší" : ""}`],
     ["Záruka", (r) => r.warranty || "—"],
@@ -402,7 +411,7 @@ export const bids: ToolHandler = async (ctx) => {
   const table = { name: "Srovnání nabídek", columns: ["Kritérium", ...rows.map((r) => r.bidder || r.file)], rows: criteria.map(([label, f]) => [label, ...rows.map(f)]) };
   const report = newReport("porovnani-nabidek", "Srovnání nabídek", {
     subtitle: `${rows.length} nabídek`,
-    summary: ai?.summary ?? "Cena, doba a záruka rozpoznány automaticky. Technické řešení, výluky a odchylky doplní AI.",
+    summary: ai?.summary ?? "Cena, doba, záruka, výluky, odchylky a předpoklady rozpoznány podle klíčových formulací. Úplné vytěžení včetně nestandardních formulací provede AI.",
     questions: ai?.questions ?? [],
     sheets: [table],
   });

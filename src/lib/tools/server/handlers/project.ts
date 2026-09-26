@@ -60,8 +60,9 @@ const num = (n: number) => (n < 0 ? null : n);
 
 function grab(text: string, labels: string[]): string {
   for (const l of labels) {
-    const m = new RegExp(`(?:^|\\n)\\s*${l}\\s*[:–-]\\s*([^\\n]+)`, "iu").exec(text);
-    if (m) return m[1].trim();
+    const m = new RegExp(`(?:^|\\n|\\.\\s)\\s*${l}\\s*[:–-]\\s*([^\\n]+)`, "iu").exec(text);
+    // hodnota končí koncem věty (PDF často slévá více údajů do jednoho řádku)
+    if (m) return m[1].split(/(?<!(?:^|\s)[\p{L}.]{1,4})\.\s+(?=\p{Lu})/u)[0].trim().replace(/[;,]$/, "").replace(/(?<!(?:^|[\s.])\p{L}{1,3})\.$/u, "");
   }
   return "";
 }
@@ -249,14 +250,7 @@ export const pdfToExcel: ToolHandler = async (ctx) => {
       rows: t.rows.map((r) => (r.length === t.columns.length ? r : [...r, ...Array(Math.max(0, t.columns.length - r.length)).fill("")].slice(0, t.columns.length))),
     }));
   } else {
-    tables = docs
-      .map((d) => {
-        const rows = (d.rows ?? textToRows(d.text)).filter((r) => r.length >= 3);
-        const width = mode(rows.map((r) => r.length));
-        const clean = rows.filter((r) => r.length === width);
-        return clean.length > 1 ? ({ name: d.name, columns: clean[0], rows: clean.slice(1) } as Table) : null;
-      })
-      .filter((t): t is Table => t !== null);
+    tables = docs.flatMap((d) => tableBlocks(d.rows ?? textToRows(d.text)).map((t, i) => ({ ...t, name: `${d.name}${i ? ` (${i + 1})` : ""}` })));
     if (!tables.length) ctx.notes.push("Bez AI se rozpoznávají jen tabulky se zřetelnými sloupci v textové vrstvě.");
   }
 
@@ -273,8 +267,21 @@ export const pdfToExcel: ToolHandler = async (ctx) => {
   return ctx.finish(report);
 };
 
-function mode(list: number[]): number {
-  const c = new Map<number, number>();
-  for (const n of list) c.set(n, (c.get(n) ?? 0) + 1);
-  return [...c.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 0;
+/** Souvislé bloky řádků se stejným počtem sloupců (≥ 3) = tabulky. První řádek bloku je záhlaví. */
+export function tableBlocks(rows: string[][]): Table[] {
+  const out: Table[] = [];
+  let block: string[][] = [];
+  const flush = () => {
+    if (block.length > 1) out.push({ columns: block[0], rows: block.slice(1) });
+    block = [];
+  };
+  for (const r of rows) {
+    if (r.length >= 3 && (!block.length || r.length === block[0].length)) block.push(r);
+    else {
+      flush();
+      if (r.length >= 3) block.push(r);
+    }
+  }
+  flush();
+  return out;
 }

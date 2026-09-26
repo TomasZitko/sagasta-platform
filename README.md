@@ -1,54 +1,73 @@
 # SAGASTA AI platforma
 
-Small AI "document machines" built on one shared project dataset. The idea is **one project intake that feeds many documents**: the technical report, B.10 ZOV, the hazard catalogue, the BOZP plan, and so on. The AI writes drafts, finds missing information and cross-checks documents. Responsibility for regulated content stays with an authorised person.
+16 AI tools for design and engineering work, built on **one shared project dataset**: **one input → many documents**.
+The AI prepares drafts, finds missing information and inconsistencies, and turns communication into tasks. Deterministic checks run in code even without AI. Responsibility for regulated content stays with an authorised person.
 
-## Tool 01 – Katalog nebezpečí (hazard catalogue)
+![Rozcestník](docs/screenshots/hub.png)
 
-`Stavba → Katalog nebezpečí` at `/katalog-nebezpeci`
+## Tools
 
-| Step | What happens |
-| --- | --- |
-| **Intake** | Construction type, activities, machinery, materials, height and depth, railway, road traffic, water, utilities, duration, headcount, plus free text and PDFs |
-| **Rules** | A deterministic engine picks candidates from the **controlled hazard library** (`src/lib/hazards/library.ts`), each with a reason |
-| **Claude** | Refines the selection, adds project-specific cause, consequence and measures, and cites evidence. `hazardId` is an **enum from the library**, so the model cannot invent a hazard name. New hazards may only be proposed under "Návrhy na doplnění knihovny" |
-| **Safety net** | A rule candidate that the AI drops or omits **stays in the catalogue**, marked for review |
-| **Checks** | Potentially missing categories: the documentation text vs. the catalogue and the form, e.g. "the text mentions a track closure but the form has no railway" |
-| | Missing input data, plus questions for the designer |
-| | Obligations under Act 309/2006 Coll.: BOZP coordinator, OIP notification, BOZP plan (Annex 5 of Government Regulation 591/2006 Coll.) |
-| **Review** | Colour status 🟢 confirmed / 🟡 inferred / 🔴 data missing. P×Z can be edited and entries removed |
-| **Export** | DOCX (landscape table with a signature block) and CSV for Excel |
+| # | Tool | Input → output | Without AI |
+| --- | --- | --- | --- |
+| 01 | **Katalog nebezpečí** | Construction → controlled hazard catalogue, P×Z, measures, obligations under Act 309/2006 Coll. | ✅ full rules engine |
+| 02 | **Extrakce dat projektu** | PDF/DOCX documentation → project data (the active project for all tools) | ✅ labels, objects, quantities, dates |
+| 03 | **Technická zpráva** | Project data + sources (+ a reference project) → technical report by section, with status found / inferred / missing | ◐ outline pre-filled from the sources |
+| 04 | **Zásady organizace výstavby** | Project data → ZOV (transport, land take, waste, earthworks balance, traffic measures, BOZP, schedule) | ◐ outline pre-filled from the sources |
+| 05 | **Technologický postup / postup bourání** | Activity → steps, checks, machinery, waste; safety linked to the hazard library | ◐ related hazards from the library |
+| 06 | **Kontrola konzistence** | Several documents → conflicting areas, volumes, dates, SO/PS objects | ✅ |
+| 07 | **Detektor chybějících informací** | Document → unfilled places, vague wording, questions for the designer | ✅ |
+| 08 | **Kontrola požadované struktury** | Documentation → check against a controlled outline (building permit / technical report / ZOV) | ✅ by headings and keywords |
+| 09 | **Porovnání revizí** | Version A + B → changed passages, objects, numbers; AI adds consequences | ✅ |
+| 10 | **Registr připomínek** | Client comments (+ a revision) → register with actions, and a check of whether each was actually addressed | ◐ splits the comments |
+| 11 | **Zápis z jednání a úkoly** | Transcript / notes → minutes, decisions, tasks with deadlines (Excel) | AI |
+| 12 | **E-mail → úkol** | E-mail → tasks, priority, deadline, draft reply | AI |
+| 13 | **Korespondence a RFI** | Rough notes → RFI / formal reply / response to an authority as a letter (DOCX) | AI |
+| 14 | **Porovnání nabídek** | Bids A, B, C… → comparison table, exclusions, deviations; **does not pick a winner** | ✅ price, duration, warranty, exclusions |
+| 15 | **Kontrola výkazu výměr** | BOQ (XLSX/CSV/PDF) + documentation → duplicates, zero quantities, bad products, units | ✅ |
+| 16 | **PDF → Excel** | Tables in PDF → clean XLSX | ◐ tables from the PDF text layout |
 
-Without `ANTHROPIC_API_KEY` the tool runs in **rules-only mode**. It still works, it just skips the AI refinement.
+Every tool has a **"Načíst ukázku"** (load sample) button with sample data for a fictional project (the reconstruction of a railway bridge), and exports to **Word** and, where it has tables, to **Excel**.
 
-![Přehled](docs/screenshots/catalogue-summary.png)
-![Položky katalogu](docs/screenshots/catalogue-rows.png)
+![Technická zpráva](docs/screenshots/technical-report.png)
+![Kontrola konzistence](docs/screenshots/consistency.png)
 
 ## Architecture
 
 ```
-src/lib/project/intake.ts     shared Project Intake (zod) – future tools read the same data
-src/lib/hazards/library.ts    controlled hazard library + regulations (curated by the library owner)
-src/lib/hazards/engine.ts     rules, coverage check, missing data, obligations under 309/2006 Coll.
-src/lib/hazards/ai.ts         Claude (structured output + enum IDs) and merge with the rules
-src/lib/hazards/docx.ts       Word export
-src/app/api/hazards/*         generate / export API
-src/components/…              intake form, catalogue view
+src/lib/project/intake.ts        shared Project Intake (zod) + store.ts (active project in the browser)
+src/lib/tools/registry.ts        metadata for all tools: inputs, samples, categories
+src/lib/tools/report.ts          one output model (Report) for all tools
+src/lib/tools/analyzers/         deterministic checks: quantities, SO/PS, milestones, placeholders, BOQ, revisions
+src/lib/tools/templates.ts       outlines for the technical report, ZOV, TP and demolition + structure rules
+src/lib/tools/lenient.ts         tolerant repair of AI output before validation (see below)
+src/lib/tools/server/            file extraction (PDF/DOCX/XLSX), Claude runner, handlers, DOCX/XLSX export
+src/lib/hazards/                 hazard catalogue (controlled library, rules, AI merge)
+src/app/nastroje/[slug]          generic tool page · src/app/api/tools/[slug] generic API
 ```
 
-The model is `claude-opus-5` by default (overridable with `ANTHROPIC_MODEL`). It uses adaptive thinking, structured outputs and server-side fallback on refusals. The system prompt containing the library is cached.
+**Files:** PDFs go to Claude as documents (it sees drawings and tables) and also have their text extracted for the deterministic checks. DOCX goes through mammoth; XLSX and CSV through exceljs (formulas are read as results).
+
+**AI:** the model is `claude-opus-5` (override with `ANTHROPIC_MODEL`). It uses streaming, adaptive thinking, structured output, server-side fallback on refusals, and a cached system prompt.
+
+**Tolerant output:** the SDK converts `enum` values in the schema into description text only, so the API does not enforce them. Before validation, `lenient.ts` therefore:
+- matches values that are close (case, diacritics);
+- drops list items with an unknown ID (so the hazard catalogue can never contain a hazard outside the library);
+- replaces other invalid values with a safe default.
+
+A single bad value no longer throws away the whole response.
 
 ## Running
 
 ```bash
 npm install
-cp .env.example .env.local   # optional: ANTHROPIC_API_KEY
+cp .env.example .env.local   # ANTHROPIC_API_KEY (optional – without it only deterministic checks run)
 npm run dev                  # http://localhost:3000
-npm test                     # unit tests (rules, merge, obligations, DOCX)
+npm test                     # 88 tests: analyzers, all tools with and without AI (stub), exports
 npm run build
 ```
 
-## Extending the library
+## Notes for production use
 
-Add an entry to `HAZARD_LIBRARY` with an `id` (`NB-xxx`), an approved name, measures, regulations and an `applies` rule. The model automatically gets the new entry in its enum. A change to the library should be reviewed by the BOZP coordinator, the same way internal document templates are.
-
-> The regulation citations in the library are at the level of the regulation and topic. Before production use, the library owner has to confirm them against the current law.
+- The **outlines** (technical report, ZOV, building permit structure) and the **hazard library** are internal templates derived from Decree 131/2024 Coll. and the BOZP regulations. Before production use, the template owner has to confirm them against the current law.
+- Without an API key, the tools marked "AI" return only a basic summary. The live Claude path is covered by tests with a stub client. It needs to be tried once against the real API with a key.
+- Project data and drafts stay in the browser (localStorage). Documents are sent only to the server and to the Claude API.

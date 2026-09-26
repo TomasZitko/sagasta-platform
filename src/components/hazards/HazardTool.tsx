@@ -3,29 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { IntakeForm, type PdfFile } from "@/components/intake/IntakeForm";
 import type { Catalogue } from "@/lib/hazards/engine";
-import { emptyIntake, ProjectIntakeSchema, sampleIntake, type ProjectIntake } from "@/lib/project/intake";
+import { emptyIntake, sampleIntake, type ProjectIntake } from "@/lib/project/intake";
+import { loadProject, saveProject } from "@/lib/project/store";
 import { CatalogueView } from "./CatalogueView";
-
-const STORAGE_KEY = "sagasta.intake.v1";
-
-function loadDraft(): ProjectIntake | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = ProjectIntakeSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveDraft(intake: ProjectIntake) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(intake));
-  } catch {
-    /* úložiště nedostupné – koncept se neuloží */
-  }
-}
 
 export function HazardTool({ aiEnabled }: { aiEnabled: boolean }) {
   const [intake, setIntake] = useState<ProjectIntake>(() => ({ ...emptyIntake(), projectName: "" }));
@@ -38,13 +18,14 @@ export function HazardTool({ aiEnabled }: { aiEnabled: boolean }) {
   const hydrated = useRef(false);
 
   useEffect(() => {
-    const draft = loadDraft();
+    // Katalog čte i zapisuje aktivní projekt – sdílený se všemi nástroji.
+    const draft = loadProject();
     if (draft) setIntake(draft);
     hydrated.current = true;
   }, []);
 
   useEffect(() => {
-    if (hydrated.current) saveDraft(intake);
+    if (hydrated.current && intake.projectName.trim()) saveProject(intake);
   }, [intake]);
 
   const valid = intake.projectName.trim().length > 0;

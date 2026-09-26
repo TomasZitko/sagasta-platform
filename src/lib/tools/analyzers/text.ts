@@ -248,12 +248,46 @@ export function milestoneConflict(list: Milestone[]): boolean {
   return new Set(months).size > 1;
 }
 
-/** Rozdělí text na odstavce (pro diff a vyhledávání). */
+/**
+ * Rozdělí text na odstavce (pro diff a vyhledávání).
+ * Prázdný řádek vždy ukončí odstavec; jinak se nový odstavec začne, když
+ * předchozí řádek končí interpunkcí nebo když řádek vypadá jako nadpis/odrážka.
+ * Zalomené řádky z PDF (bez interpunkce na konci) se spojí.
+ */
 export function paragraphs(text: string): string[] {
-  return text
-    .split(/\n\s*\n|\n(?=\s*(?:[A-Z]\.\d|\d+\.\d*\s|[•\-–]\s))/)
-    .map((p) => p.replace(/\s+/g, " ").trim())
-    .filter((p) => p.length > 0);
+  const out: string[] = [];
+  let cur = "";
+  const flush = () => {
+    const t = cur.replace(/\s+/g, " ").trim();
+    if (t) out.push(t);
+    cur = "";
+  };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) {
+      flush();
+      continue;
+    }
+    const startsBlock = /^(?:[A-Z]\.\d|\d+(?:\.\d+)*[.)]?\s|[•\-–]\s|[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][^.]{0,60}:)/.test(line);
+    if (cur && (/[.:;!?]$/.test(cur.trim()) || startsBlock)) flush();
+    cur += (cur ? " " : "") + line;
+  }
+  flush();
+  return out;
+}
+
+/** Odstavce obsahující některé z klíčových slov (bez diakritiky). */
+export function relevantParagraphs(docs: NamedText[], keywords: string[], limit = 4): { doc: string; text: string }[] {
+  if (!keywords.length) return [];
+  const hits: { doc: string; text: string; score: number }[] = [];
+  for (const d of docs) {
+    for (const para of paragraphs(d.text)) {
+      const f = fold(para);
+      const score = keywords.filter((k) => f.includes(k)).length;
+      if (score) hits.push({ doc: d.name, text: para, score });
+    }
+  }
+  return hits.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
 export function truncate(text: string, max: number): string {

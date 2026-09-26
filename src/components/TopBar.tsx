@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 
 const NAV = [
   { href: "/", label: "Nástroje" },
-  { href: "/katalog-nebezpeci", label: "Katalog nebezpečí" },
+  { href: "/nastroje/extrakce-dat", label: "Projekt" },
+  { href: "/katalog-nebezpeci", label: "BOZP" },
 ];
 
 export function TopBar() {

@@ -32,10 +32,17 @@ export async function processFile(f: UploadedFile): Promise<ProcessedDoc> {
       const pdf = await getDocumentProxy(new Uint8Array(buf));
       const { text, totalPages } = await extractText(pdf, { mergePages: true });
       const clean = String(text).replace(/[ \t]+\n/g, "\n").trim();
+      const rows: string[][] = [];
+      for (let i = 1; i <= Math.min(totalPages, 200); i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        rows.push(...layoutRows(content.items as PdfTextItem[]));
+      }
       return {
         name: f.name,
         kind: "pdf",
         text: clean,
+        rows,
         pdfBase64: f.data,
         pages: totalPages,
         warning: clean.length < 40 * totalPages ? "PDF má malou nebo žádnou textovou vrstvu (sken?) – čte ho jen AI." : undefined,
@@ -76,6 +83,55 @@ export async function processFile(f: UploadedFile): Promise<ProcessedDoc> {
     console.error("[files]", f.name, err);
     return { name: f.name, kind: "text", text: "", warning: `Soubor ${f.name} se nepodařilo přečíst.` };
   }
+}
+
+interface PdfTextItem {
+  str: string;
+  transform: number[];
+  width: number;
+  height: number;
+}
+
+/**
+ * Rekonstrukce řádků a sloupců z pozic textu v PDF: položky se stejnou
+ * souřadnicí y tvoří řádek, větší mezera v ose x odděluje buňky.
+ */
+export function layoutRows(items: PdfTextItem[]): string[][] {
+  // Prázdné položky necháváme: široká mezera je v řadě exportů jediný signál hranice sloupce.
+  const words = items
+    .filter((i) => i.str.trim() || i.width > 0)
+    .map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5], w: i.width, h: Math.abs(i.transform[3]) || i.height || 10 }));
+  const lines: (typeof words)[] = [];
+  for (const w of words.sort((a, b) => b.y - a.y || a.x - b.x)) {
+    const line = lines.find((l) => Math.abs(l[0].y - w.y) <= Math.max(2, w.h * 0.3));
+    if (line) line.push(w);
+    else lines.push([w]);
+  }
+  return lines.map((line) => {
+    line.sort((a, b) => a.x - b.x);
+    const cells: string[] = [];
+    let cur = "";
+    let end = -Infinity;
+    for (const w of line) {
+      if (!w.s.trim()) {
+        if (w.w > Math.max(6, w.h * 0.9) && cur.trim()) {
+          cells.push(cur.trim());
+          cur = "";
+        }
+        end = Math.max(end, w.x + w.w);
+        continue;
+      }
+      const gap = w.x - end;
+      if (cur && gap > Math.max(6, w.h * 0.9)) {
+        cells.push(cur.trim());
+        cur = "";
+      } else if (cur && gap > w.h * 0.15) cur += " ";
+      cur += w.s;
+      end = w.x + w.w;
+    }
+    if (cur.trim()) cells.push(cur.trim());
+    return cells;
+  });
 }
 
 function cellToString(v: unknown): string {

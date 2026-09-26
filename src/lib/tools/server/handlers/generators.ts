@@ -3,7 +3,7 @@ import { z } from "zod";
 import { HAZARD_LIBRARY } from "@/lib/hazards/library";
 import { matchRules } from "@/lib/hazards/engine";
 import type { ProjectIntake } from "@/lib/project/intake";
-import { findPlaceholders } from "../../analyzers/text";
+import { findPlaceholders, relevantParagraphs } from "../../analyzers/text";
 import { newReport, statusStats, type Finding, type Report, type Section } from "../../report";
 import { DEMOLITION_PROCEDURE, TECHNICAL_REPORT, TECH_PROCEDURE, ZOV, outlineForPrompt, type OutlineSection } from "../../templates";
 import { InputError, projectForPrompt, type ToolContext, type ToolHandler } from "../context";
@@ -65,6 +65,17 @@ async function generateOutline(job: OutlineJob): Promise<Report> {
     const s = byId.get(o.id);
     if (!s) {
       const sk = job.skeleton(o);
+      // bez AI: převezmi z podkladů odstavce, které k sekci věcně patří
+      const hits = sk.body || sk.bullets ? [] : relevantParagraphs(job.docs.map((d) => ({ name: d.name, text: d.text })), o.keywords, 3);
+      if (hits.length) {
+        return {
+          id: o.id,
+          title: o.title,
+          status: "inferred",
+          body: hits.map((h) => h.text).join("\n\n"),
+          gaps: [`Převzato z podkladů (${[...new Set(hits.map((h) => h.doc))].join(", ")}) – přeformulovat a doplnit.`, o.guidance],
+        };
+      }
       return { id: o.id, title: o.title, status: sk.status ?? "missing", body: sk.body, bullets: sk.bullets, gaps: [o.guidance] };
     }
     const placeholders = findPlaceholders(s.content).filter((p) => /DOPLNIT/i.test(p.raw) || p.kind.startsWith("Zástup"));
@@ -90,7 +101,8 @@ async function generateOutline(job: OutlineJob): Promise<Report> {
       });
     }
   } else {
-    report.summary = "Kostra dokumentu vyplněná z dat projektu. Text sekcí vygeneruje AI – bez ní slouží osnova jako kontrolní seznam.";
+    report.summary =
+      "Kostra dokumentu: sekce jsou předvyplněné z dat projektu a z odpovídajících pasáží podkladů. Souvislý text vygeneruje AI – bez ní slouží osnova jako kontrolní seznam.";
   }
 
   const missingRequired = report.sections.filter((s) => s.status === "missing" && outline.find((o) => o.id === s.id)?.required).length;

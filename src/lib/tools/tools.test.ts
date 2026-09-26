@@ -268,3 +268,53 @@ describe("tolerantní oprava výstupu AI", async () => {
     expect(r.items[0].priority).toBe("střední");
   });
 });
+
+describe("režim bez AI – kvalita", () => {
+  it("porovnání revizí rozliší jednotlivé změněné řádky", async () => {
+    const { report } = await run("porovnani-revizi", false);
+    expect(Number(report.stats[0].value)).toBeGreaterThanOrEqual(3);
+    expect(report.sections.find((s) => s.id === "objects")?.bullets).toContain("Přidán SO 203");
+  });
+
+  it("generátor TZ předvyplní sekce z podkladů", async () => {
+    const { report } = await run("technicka-zprava", false);
+    const zakladani = report.sections.find((s) => s.id === "tz6")!;
+    expect(zakladani.status).toBe("inferred");
+    expect(zakladani.body).toContain("mikropilotách");
+    expect(report.sections.find((s) => s.id === "tz1")!.body).toContain("Správa železnic");
+  });
+
+  it("porovnání nabídek najde výluku z plnění a alternativu", async () => {
+    const { report } = await run("porovnani-nabidek", false);
+    const titles = report.sections[1].findings!.map((f) => `${f.title} ${f.detail ?? ""}`).join(" | ");
+    expect(titles).toMatch(/Stavby Alfa a\.s\.: výluka z plnění přeložku kabelů/);
+    expect(titles).toMatch(/Mosty Beta s\.r\.o\.: odchylka/);
+  });
+});
+
+describe("PDF rozložení", async () => {
+  const { layoutRows } = await import("./server/files");
+  const { tableBlocks } = await import("./server/handlers/project");
+  const item = (str: string, x: number, y: number) => ({ str, transform: [10, 0, 0, 10, x, y], width: str.length * 5, height: 10 });
+
+  it("složí buňky do řádků a sloupců a najde tabulku", () => {
+    const rows = layoutRows([
+      item("Kód", 50, 700), item("Popis", 150, 700), item("MJ", 350, 700),
+      item("131201101", 50, 685), item("Hloubení", 150, 685), item("jam", 195, 685), item("m3", 350, 685),
+      item("421321128", 50, 670), item("Mostní NK", 150, 670), item("m3", 350, 670),
+    ]);
+    expect(rows[1]).toEqual(["131201101", "Hloubení jam", "m3"]);
+    const t = tableBlocks([["Nadpis"], ...rows]);
+    expect(t).toHaveLength(1);
+    expect(t[0].columns).toEqual(["Kód", "Popis", "MJ"]);
+    expect(t[0].rows).toHaveLength(2);
+  });
+});
+
+describe("PDF rozložení – mezery jako hranice sloupců", async () => {
+  const { layoutRows } = await import("./server/files");
+  it("široká prázdná položka odděluje buňky", () => {
+    const it = (str: string, x: number, w: number) => ({ str, transform: [12, 0, 0, 12, x, 700], width: w, height: 12 });
+    expect(layoutRows([it("Kód", 26, 22), it(" ", 48, 99), it("Popis", 122, 28), it(" ", 150, 78), it("MJ", 209, 12)])[0]).toEqual(["Kód", "Popis", "MJ"]);
+  });
+});
