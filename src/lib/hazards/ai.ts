@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { ProjectIntake } from "@/lib/project/intake";
 import {
@@ -16,6 +15,9 @@ import {
 } from "./engine";
 import { CATEGORIES, HAZARD_LIBRARY, HAZARDS_BY_ID, REGULATIONS } from "./library";
 import { clampLevel } from "./risk";
+import { AiUnavailableError, jsonSchemaFormat, parseMessage } from "@/lib/tools/server/claude";
+
+export { AiUnavailableError };
 
 export const DEFAULT_MODEL = "claude-opus-5";
 
@@ -109,7 +111,7 @@ export async function generateWithAi(
     },
   ];
 
-  const response = await client.beta.messages.parse({
+  const response = await client.beta.messages.create({
     model,
     max_tokens: 16000,
     betas: ["server-side-fallback-2026-07-01"],
@@ -117,18 +119,14 @@ export async function generateWithAi(
     thinking: { type: "adaptive" },
     system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content }],
-    output_config: { format: betaZodOutputFormat(AiOutputSchema) },
+    // Enumy SDK převádí jen do popisu – ID mimo knihovnu odfiltruje tolerantní parser (lenient.ts).
+    output_config: { format: jsonSchemaFormat(AiOutputSchema) },
   });
-
-  if (response.stop_reason === "refusal") throw new AiUnavailableError("Model požadavek odmítl zpracovat.");
-  if (response.stop_reason === "max_tokens") throw new AiUnavailableError("Odpověď modelu byla zkrácena (max_tokens).");
-  const parsed = response.parsed_output;
-  if (!parsed) throw new AiUnavailableError("Model nevrátil platný strukturovaný výstup.");
+  const parsed = parseMessage(response, AiOutputSchema);
 
   return mergeAiOutput(intake, parsed, { model: response.model, now: opts.now });
 }
 
-export class AiUnavailableError extends Error {}
 
 /**
  * Sloučí výstup AI s pravidly. Pravidla jsou záchranná síť: kandidát, kterého

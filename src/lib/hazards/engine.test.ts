@@ -155,14 +155,15 @@ describe("export DOCX", () => {
 describe("volání Claude (stub klienta)", () => {
   const stub = (response: Record<string, unknown>) => {
     const calls: Record<string, unknown>[] = [];
-    const client = { beta: { messages: { parse: async (params: Record<string, unknown>) => (calls.push(params), response) } } };
+    const client = { beta: { messages: { create: async (params: Record<string, unknown>) => (calls.push(params), response) } } };
     return { client: client as unknown as import("@anthropic-ai/sdk").default, calls };
   };
 
   it("posílá strukturovaný výstup, fallbacky a PDF jako dokument", async () => {
     const { generateWithAi } = await import("./ai");
     const parsed: AiOutput = { selected: [], rejected: [], missingCategories: [], questions: ["Q?"], librarySuggestions: [] };
-    const { client, calls } = stub({ stop_reason: "end_turn", model: "claude-opus-5", parsed_output: parsed });
+    const withInvalid = { ...parsed, selected: [{ hazardId: "NB-999", confidence: "confirmed", evidence: "", projectCause: "", projectRisk: "", measures: [], probability: 3, severity: 3 }] };
+    const { client, calls } = stub({ stop_reason: "end_turn", model: "claude-opus-5", content: [{ type: "text", text: JSON.stringify(withInvalid) }] });
     const cat = await generateWithAi(sampleIntake(), [{ name: "TZ.pdf", base64: "JVBERi0=" }], { client });
     const p = calls[0] as any;
     expect(p.model).toBe("claude-opus-5");
@@ -172,11 +173,12 @@ describe("volání Claude (stub klienta)", () => {
     expect(p.messages[0].content[0]).toMatchObject({ type: "document", title: "TZ.pdf" });
     expect(cat.questions[0]).toBe("Q?");
     expect(cat.entries.length).toBeGreaterThan(10); // pravidla zůstávají jako záchranná síť
+    expect(cat.entries.some((e) => e.hazardId === "NB-999")).toBe(false); // ID mimo knihovnu vyřazeno
   });
 
   it("odmítnutí modelu vyhodí AiUnavailableError", async () => {
     const { generateWithAi, AiUnavailableError } = await import("./ai");
-    const { client } = stub({ stop_reason: "refusal", model: "claude-opus-5", parsed_output: null });
+    const { client } = stub({ stop_reason: "refusal", model: "claude-opus-5", content: [] });
     await expect(generateWithAi(sampleIntake(), [], { client })).rejects.toBeInstanceOf(AiUnavailableError);
   });
 });
