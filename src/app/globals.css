@@ -528,3 +528,9 @@ kbd { font-family: var(--mono); font-size: 11px; line-height: 1; padding: 3px 6p
   .table th { position: static; }
   a { text-decoration: none; }
 }
+/* horní lišta na úzkých displejích – navigace se zúží a posouvá uvnitř */
+.topbar__inner { gap: 10px; }
+.topbar__nav { flex: 1 1 auto; min-width: 0; justify-content: flex-end; overflow-x: auto; scrollbar-width: none; }
+.topbar__nav::-webkit-scrollbar { display: none; }
+.brand, .kbd-btn, .theme-btn { flex: none; }
+@media (max-width: 480px) { .topbar__nav a { padding: 6px 8px; } .brand { font-size: 13px; letter-spacing: 0.04em; } }

@@ -195,7 +195,7 @@ export function Copilot({ aiEnabled }: { aiEnabled: boolean }) {
                       ))}
                   </div>
                 )}
-                {(m.actions?.length || m.followUps?.length) && (
+                {Boolean(m.actions?.length || m.followUps?.length) && (
                   <div className="chips" style={{ marginTop: 10 }}>
                     {m.actions?.map((a) => {
                       const t = TOOLS_BY_SLUG.get(a.slug)!;

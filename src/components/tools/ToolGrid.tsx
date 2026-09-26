@@ -39,11 +39,24 @@ export function ToolGrid({ tools }: { tools: ToolWithSample[] }) {
     cards[Math.min(cards.length - 1, Math.max(0, i + d))]?.focus();
   };
 
+  /** Relevance: shoda v názvu > ve „vstup → výstup“ > v popisu; všechna slova dotazu musí sedět. */
+  const rank = (t: ToolWithSample): number => {
+    const words = fold(q).split(/\s+/).filter(Boolean);
+    let s = 0;
+    for (const w of words) {
+      const title = fold(t.title);
+      const v = title.startsWith(w) ? 6 : title.includes(w) ? 4 : fold(t.flow).includes(w) ? 2 : fold(t.description).includes(w) ? 1 : 0;
+      if (!v) return 0;
+      s += v;
+    }
+    return s;
+  };
   const filtered = useMemo(
     () =>
-      tools.filter(
-        (t) => (cat === "all" || t.category === cat) && (!q || fold(`${t.title} ${t.flow} ${t.description}`).includes(fold(q))),
-      ),
+      tools
+        .filter((t) => (cat === "all" || t.category === cat) && (!q.trim() || rank(t) > 0))
+        .sort((a, b) => (q.trim() ? rank(b) - rank(a) : 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [tools, q, cat],
   );
 
@@ -111,9 +124,11 @@ export function ToolGrid({ tools }: { tools: ToolWithSample[] }) {
             <Group title="Naposledy použité" list={recent.filter((s) => !favorites.includes(s)).map((s) => tools.find((t) => t.slug === s)).filter(Boolean).slice(0, 4) as ToolWithSample[]} favorites={favorites} />
           </>
         )}
-        {ORDER.map((c) => (
-          <Group key={c} title={CATEGORY_LABEL[c]} list={filtered.filter((t) => t.category === c)} favorites={favorites} />
-        ))}
+        {q.trim() ? (
+          <Group title={`Výsledky hledání (${filtered.length}) – Enter otevře první`} list={filtered} favorites={favorites} />
+        ) : (
+          ORDER.map((c) => <Group key={c} title={CATEGORY_LABEL[c]} list={filtered.filter((t) => t.category === c)} favorites={favorites} />)
+        )}
       </div>
       <p className="small muted">
         Tip: <kbd>{formatKeys("mod+k")}</kbd> paleta příkazů · <kbd>/</kbd> hledat · <kbd>?</kbd> všechny zkratky · šipky mezi kartami

@@ -47,7 +47,9 @@ function matches(chord: string, e: KeyboardEvent): boolean {
   const wantMod = mod ? (isMac() ? e.metaKey : e.ctrlKey) : !(e.metaKey || e.ctrlKey);
   const k = e.key.toLowerCase();
   const keyOk = key === "enter" ? k === "enter" : key === "escape" ? k === "escape" : k === key || (e.code === `Key${key.toUpperCase()}` && key.length === 1);
-  return keyOk && wantMod && parts.includes("shift") === e.shiftKey && parts.includes("alt") === e.altKey;
+  // u symbolů (?, /) je Shift součástí znaku na většině rozložení – nekontrolujeme ho
+  const symbol = key.length === 1 && !/[a-z0-9]/.test(key);
+  return keyOk && wantMod && (symbol || parts.includes("shift") === e.shiftKey) && parts.includes("alt") === e.altKey;
 }
 
 const isTyping = (t: EventTarget | null) =>

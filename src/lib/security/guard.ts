@@ -51,7 +51,9 @@ export function guard(req: Request, opts: { bucket: string; perMinute: number; m
   if (!sameOrigin(req)) return NextResponse.json({ error: "Požadavek z cizího původu byl odmítnut." }, { status: 403 });
   const len = Number(req.headers.get("content-length") ?? 0);
   if (len > (opts.maxBytes ?? MAX_BODY_BYTES)) return NextResponse.json({ error: "Požadavek je příliš velký." }, { status: 413 });
-  if (!rateLimit(`${opts.bucket}:${clientIp(req)}`, opts.perMinute)) {
+  // SAGASTA_RATE_LIMIT násobí limity (např. 3 pro kancelář za jednou veřejnou IP)
+  const factor = Math.max(0.1, Number(process.env.SAGASTA_RATE_LIMIT ?? 1) || 1);
+  if (!rateLimit(`${opts.bucket}:${clientIp(req)}`, Math.round(opts.perMinute * factor))) {
     return NextResponse.json({ error: "Příliš mnoho požadavků – zkuste to za minutu znovu." }, { status: 429, headers: { "Retry-After": "60" } });
   }
   return null;
