@@ -12,6 +12,7 @@ import {
   type Level,
 } from "@/lib/hazards/risk";
 import type { ProjectIntake } from "@/lib/project/intake";
+import { neutralizeFormula } from "@/lib/tools/report";
 
 const CONFIDENCE = {
   confirmed: { label: "Potvrzeno", cls: "pill--ok" },
@@ -101,7 +102,7 @@ export function CatalogueView({ catalogue, intake }: { catalogue: Catalogue; int
       CONFIDENCE[e.confidence].label,
       SOURCE[e.source],
     ]);
-    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+    const csv = [header, ...rows].map((r) => r.map((c) => `"${neutralizeFormula(String(c)).replace(/"/g, '""')}"`).join(";")).join("\r\n");
     download(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }), "KatalogNebezpeci.csv");
   }
 

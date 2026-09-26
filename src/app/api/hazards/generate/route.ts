@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AiUnavailableError, generateWithAi } from "@/lib/hazards/ai";
 import { buildRuleCatalogue } from "@/lib/hazards/engine";
 import { ProjectIntakeSchema } from "@/lib/project/intake";
+import { guard } from "@/lib/security/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -17,6 +18,8 @@ const RequestSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const blocked = guard(req, { bucket: "hazards", perMinute: 20 });
+  if (blocked) return blocked;
   const body = RequestSchema.safeParse(await req.json().catch(() => null));
   if (!body.success) {
     return NextResponse.json({ error: "Neplatný vstup", issues: body.error.issues }, { status: 400 });

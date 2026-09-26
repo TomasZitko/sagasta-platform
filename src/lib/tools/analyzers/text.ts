@@ -36,6 +36,12 @@ function compareCodes(a: string, b: string) {
   return pa.localeCompare(pb) || Number(na) - Number(nb);
 }
 
+/** První označení objektu podle pořadí výskytu (ne abecedně). */
+export function firstObjectCode(text: string): string {
+  const m = new RegExp(OBJECT_RE.source).exec(text);
+  return m ? `${m[1]} ${m[2]}` : "";
+}
+
 /* ——— Veličiny s jednotkou ——— */
 
 export interface Quantity {

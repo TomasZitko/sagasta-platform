@@ -16,7 +16,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
-import { SEVERITY_LABEL, STATUS_LABEL, type Report, type Table, type Tone } from "../report";
+import { neutralizeFormula, SEVERITY_LABEL, STATUS_LABEL, type Report, type Table, type Tone } from "../report";
 
 const FONT = "Arial";
 const INK = "0B1B2B";
@@ -195,7 +195,7 @@ export async function reportToXlsx(r: Report): Promise<Buffer> {
     while (used.has(name)) name = `${name.slice(0, 25)} ${i + 1}`;
     used.add(name);
     const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });
-    ws.addRow(t.columns);
+    ws.addRow(t.columns.map(neutralizeFormula));
     for (const row of t.rows) ws.addRow(row.map(toCellValue));
     const header = ws.getRow(1);
     header.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -224,7 +224,7 @@ function toCellValue(v: string): string | number {
     const n = Number(s.replace(/[\s ]/g, "").replace(",", "."));
     if (Number.isFinite(n) && !/^0\d/.test(s)) return n;
   }
-  return s;
+  return neutralizeFormula(s);
 }
 
 export function fileSlug(title: string): string {

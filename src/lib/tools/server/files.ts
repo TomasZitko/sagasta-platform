@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import type { UploadedFile } from "../types";
 
 /**
@@ -8,7 +9,7 @@ import type { UploadedFile } from "../types";
 
 export interface ProcessedDoc {
   name: string;
-  kind: "pdf" | "docx" | "sheet" | "text";
+  kind: "pdf" | "docx" | "sheet" | "text" | "image";
   /** Extrahovaný text (u PDF text vrstvy – u skenů může být prázdný). */
   text: string;
   /** Tabulková data (XLSX/CSV) – list řádků. */
@@ -16,8 +17,45 @@ export interface ProcessedDoc {
   /** PDF pro AI jako document blok. */
   pdfBase64?: string;
   pages?: number;
+  /** Obrázek pro AI (vision). */
+  image?: { base64: string; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" };
+  /** SHA-256 obsahu – detekce duplicit. */
+  sha256: string;
+  size: number;
   warning?: string;
 }
+
+export type Sniffed = "pdf" | "zip" | "png" | "jpeg" | "webp" | "gif" | "text" | "binary";
+
+/** Skutečný typ podle obsahu (magic bytes) – přípona souboru se neověřuje jen podle jména. */
+export function sniff(buf: Buffer): Sniffed {
+  if (buf.subarray(0, 5).toString("latin1") === "%PDF-") return "pdf";
+  if (buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04) return "zip";
+  if (buf[0] === 0x89 && buf.subarray(1, 4).toString("latin1") === "PNG") return "png";
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpeg";
+  if (buf.subarray(0, 4).toString("latin1") === "RIFF" && buf.subarray(8, 12).toString("latin1") === "WEBP") return "webp";
+  if (buf.subarray(0, 4).toString("latin1") === "GIF8") return "gif";
+  const head = buf.subarray(0, 4096);
+  return head.includes(0) ? "binary" : "text";
+}
+
+const EXPECTED: Record<string, Sniffed[]> = {
+  pdf: ["pdf"],
+  docx: ["zip"],
+  xlsx: ["zip"],
+  xlsm: ["zip"],
+  png: ["png"],
+  jpg: ["jpeg"],
+  jpeg: ["jpeg"],
+  webp: ["webp"],
+  gif: ["gif"],
+  txt: ["text"],
+  md: ["text"],
+  csv: ["text"],
+  eml: ["text"],
+};
+
+const IMAGE_TYPES: Record<string, NonNullable<ProcessedDoc["image"]>["mediaType"]> = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
 
 export const MAX_TOTAL_BYTES = 30 * 1024 * 1024;
 
@@ -26,7 +64,21 @@ const ext = (name: string) => name.toLowerCase().split(".").pop() ?? "";
 export async function processFile(f: UploadedFile): Promise<ProcessedDoc> {
   const buf = Buffer.from(f.data, "base64");
   const e = ext(f.name);
+  const base = { name: f.name, sha256: createHash("sha256").update(buf).digest("hex"), size: buf.length };
+  const actual = sniff(buf);
+  const expected = EXPECTED[e];
+  if (!expected || !expected.includes(actual)) {
+    return {
+      ...base,
+      kind: "text",
+      text: "",
+      warning: expected ? `${f.name}: obsah neodpovídá příponě .${e} – soubor přeskočen.` : `${f.name}: nepodporovaný typ souboru – přeskočen.`,
+    };
+  }
   try {
+    if (IMAGE_TYPES[actual]) {
+      return { ...base, kind: "image", text: "", image: { base64: f.data, mediaType: IMAGE_TYPES[actual] } };
+    }
     if (e === "pdf") {
       const { extractText, getDocumentProxy } = await import("unpdf");
       const pdf = await getDocumentProxy(new Uint8Array(buf));
@@ -39,7 +91,7 @@ export async function processFile(f: UploadedFile): Promise<ProcessedDoc> {
         rows.push(...layoutRows(content.items as PdfTextItem[]));
       }
       return {
-        name: f.name,
+        ...base,
         kind: "pdf",
         text: clean,
         rows,
@@ -51,7 +103,7 @@ export async function processFile(f: UploadedFile): Promise<ProcessedDoc> {
     if (e === "docx") {
       const mammoth = await import("mammoth");
       const { value } = await mammoth.extractRawText({ buffer: buf });
-      return { name: f.name, kind: "docx", text: value.trim() };
+      return { ...base, kind: "docx", text: value.trim() };
     }
     if (e === "xlsx" || e === "xlsm") {
       const ExcelJS = (await import("exceljs")).default;
@@ -67,21 +119,21 @@ export async function processFile(f: UploadedFile): Promise<ProcessedDoc> {
           parts.push(values.join("\t"));
         });
       });
-      return { name: f.name, kind: "sheet", text: parts.join("\n"), rows };
+      return { ...base, kind: "sheet", text: parts.join("\n"), rows };
     }
     if (e === "csv") {
-      const text = buf.toString("utf8").replace(/^﻿/, "");
+      const text = buf.toString("utf8").replace(/^\ufeff/, "");
       const delim = (text.split("\n")[0].match(/;/g)?.length ?? 0) >= (text.split("\n")[0].match(/,/g)?.length ?? 0) ? ";" : ",";
       const rows = text
         .split(/\r?\n/)
         .filter((l) => l.trim())
         .map((l) => splitCsv(l, delim));
-      return { name: f.name, kind: "sheet", text: rows.map((r) => r.join("\t")).join("\n"), rows };
+      return { ...base, kind: "sheet", text: rows.map((r) => r.join("\t")).join("\n"), rows };
     }
-    return { name: f.name, kind: "text", text: buf.toString("utf8").replace(/^﻿/, "").trim() };
+    return { ...base, kind: "text", text: buf.toString("utf8").replace(/^\ufeff/, "").trim() };
   } catch (err) {
-    console.error("[files]", f.name, err);
-    return { name: f.name, kind: "text", text: "", warning: `Soubor ${f.name} se nepodařilo přečíst.` };
+    console.error("[files] failed to read", f.name, err instanceof Error ? err.message : err);
+    return { ...base, kind: "text", text: "", warning: `Soubor ${f.name} se nepodařilo přečíst.` };
   }
 }
 
@@ -164,7 +216,21 @@ function splitCsv(line: string, delim: string): string[] {
 
 export async function processFiles(files: Record<string, UploadedFile[]>): Promise<Record<string, ProcessedDoc[]>> {
   const out: Record<string, ProcessedDoc[]> = {};
-  for (const [key, list] of Object.entries(files)) out[key] = await Promise.all(list.map(processFile));
+  // max. 4 souběžně – PDF parsování je náročné na paměť
+  for (const [key, list] of Object.entries(files)) out[key] = await mapLimit(list, 4, processFile);
+  return out;
+}
+
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return out;
 }
 

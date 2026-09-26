@@ -6,6 +6,8 @@ import type { Catalogue } from "@/lib/hazards/engine";
 import { emptyIntake, sampleIntake, type ProjectIntake } from "@/lib/project/intake";
 import { loadProject, saveProject } from "@/lib/project/store";
 import { CatalogueView } from "./CatalogueView";
+import { formatKeys, useCommands } from "../ux/hotkeys";
+import { toast } from "../ux/toast";
 
 export function HazardTool({ aiEnabled }: { aiEnabled: boolean }) {
   const [intake, setIntake] = useState<ProjectIntake>(() => ({ ...emptyIntake(), projectName: "" }));
@@ -57,6 +59,14 @@ export function HazardTool({ aiEnabled }: { aiEnabled: boolean }) {
 
   const step = result ? 2 : 1;
 
+  useCommands(
+    [
+      { id: "hz-run", label: "Vygenerovat katalog", group: "Tento nástroj", keys: "mod+enter", run: () => void generate() },
+      { id: "hz-sample", label: "Načíst ukázkový projekt", group: "Tento nástroj", keys: "alt+s", run: () => (setIntake(sampleIntake()), setResult(null), toast("Načten ukázkový projekt")) },
+    ],
+    [intake, useAi, pdfs],
+  );
+
   return (
     <div className="tool-layout">
       <div className="row" style={{ justifyContent: "space-between" }}>
@@ -103,7 +113,7 @@ export function HazardTool({ aiEnabled }: { aiEnabled: boolean }) {
             </>
           ) : (
             <>
-              Vygenerovat katalog <span aria-hidden>→</span>
+              Vygenerovat katalog <kbd className="kbd--on-dark">{formatKeys("mod+enter")}</kbd>
             </>
           )}
         </button>

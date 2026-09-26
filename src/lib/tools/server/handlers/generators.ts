@@ -1,4 +1,5 @@
 import "server-only";
+import { safeName } from "../claude";
 import { z } from "zod";
 import { HAZARD_LIBRARY } from "@/lib/hazards/library";
 import { matchRules } from "@/lib/hazards/engine";
@@ -26,7 +27,7 @@ const OutlineOutput = (ids: [string, ...string[]]) =>
     questions: z.array(z.string()).describe("Max. 10 otázek pro projektanta, seřazené podle důležitosti."),
   });
 
-interface OutlineJob {
+export interface OutlineJob {
   ctx: ToolContext;
   slug: string;
   title: string;
@@ -41,13 +42,13 @@ interface OutlineJob {
   skeleton: (s: OutlineSection) => Pick<Section, "body" | "bullets" | "status">;
 }
 
-async function generateOutline(job: OutlineJob): Promise<Report> {
+export async function generateOutline(job: OutlineJob): Promise<Report> {
   const { ctx, outline } = job;
   const report = newReport(job.slug, job.title, { subtitle: job.subtitle, meta: job.meta });
   const ids = outline.map((s) => s.id) as [string, ...string[]];
 
   const refText = job.reference?.length
-    ? `\n\nVZOROVÝ DOKUMENT z předchozího projektu (převezmi strukturu, rozsah a styl; FAKTA z něj NEPŘEBÍREJ – jiná stavba):\n${job.reference.map((d) => `<vzor nazev="${d.name}">\n${d.text.slice(0, 40_000)}\n</vzor>`).join("\n")}`
+    ? `\n\nVZOROVÝ DOKUMENT z předchozího projektu (převezmi strukturu, rozsah a styl; FAKTA z něj NEPŘEBÍREJ – jiná stavba):\n${job.reference.map((d) => `<vzor nazev="${safeName(d.name)}">\n${d.text.slice(0, 40_000)}\n</vzor>`).join("\n")}`
     : "";
 
   const ai = await ctx.ai({

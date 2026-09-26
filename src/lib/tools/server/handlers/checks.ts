@@ -1,4 +1,5 @@
 import "server-only";
+import { safeName } from "../claude";
 import { z } from "zod";
 import { boqTotal, checkBoq, parseBoq, textToRows, type BoqItem } from "../../analyzers/boq";
 import { compareRevisions } from "../../analyzers/revision";
@@ -26,7 +27,7 @@ const FindingOut = z.object({
 
 const toFinding = (f: z.infer<typeof FindingOut>): Finding => ({ severity: f.severity, title: f.title, detail: f.detail, evidence: f.evidence || undefined });
 
-const docsBlock = (docs: NamedText[], max = 60_000) => docs.map((d) => `<dokument nazev="${d.name}">\n${truncate(d.text, max)}\n</dokument>`).join("\n");
+const docsBlock = (docs: NamedText[], max = 60_000) => docs.map((d) => `<dokument nazev="${safeName(d.name)}">\n${truncate(d.text, max)}\n</dokument>`).join("\n");
 
 /* ————————————————————————————————————————————————
  * 06 Kontrola konzistence

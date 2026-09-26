@@ -1,11 +1,14 @@
 import { catalogueToDocx } from "@/lib/hazards/docx";
 import type { Catalogue } from "@/lib/hazards/engine";
+import { guard } from "@/lib/security/guard";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const blocked = guard(req, { bucket: "export", perMinute: 60, maxBytes: 5 * 1024 * 1024 });
+  if (blocked) return blocked;
   const catalogue = (await req.json().catch(() => null)) as Catalogue | null;
-  if (!catalogue?.entries || !catalogue.project) {
+  if (!catalogue?.project || !Array.isArray(catalogue.entries) || catalogue.entries.length > 500 || typeof catalogue.project.name !== "string") {
     return Response.json({ error: "Chybí katalog." }, { status: 400 });
   }
   const buffer = await catalogueToDocx(catalogue);

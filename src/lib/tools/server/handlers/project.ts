@@ -1,4 +1,5 @@
 import "server-only";
+import { safeName } from "../claude";
 import { z } from "zod";
 import {
   CONSTRUCTION_TYPES,
@@ -76,7 +77,7 @@ export const extractProject: ToolHandler = async (ctx) => {
     system: `Vytěžuješ strukturovaná data stavby z projektové dokumentace pro interní databázi projektu. Každý údaj ber jen z podkladů; neznámé hodnoty vyplň -1 / "neuvedeno" / "unknown" / prázdný řetězec. Ke každému účastníkovi, objektu, parametru a termínu uveď zdrojový dokument. Rozpory mezi dokumenty vypiš do conflicts.\n\nČíselníky:\nconstructionTypes: ${CONSTRUCTION_TYPES.map((c) => `${c.id}=${c.label}`).join(", ")}\nactivities: ${WORK_ACTIVITIES.map((c) => `${c.id}=${c.label}`).join(", ")}\nmachinery: ${MACHINERY.map((c) => `${c.id}=${c.label}`).join(", ")}\nmaterials: ${MATERIALS.map((c) => `${c.id}=${c.label}`).join(", ")}`,
     prompt: docs
       .filter((d) => !ctx.files("docs").find((f) => f.name === d.name)?.pdfBase64)
-      .map((d) => `<dokument nazev="${d.name}">\n${truncate(d.text, 80_000)}\n</dokument>`)
+      .map((d) => `<dokument nazev="${safeName(d.name)}">\n${truncate(d.text, 80_000)}\n</dokument>`)
       .join("\n\n"),
     docs: ctx.files("docs").filter((d) => d.pdfBase64),
     schema: ExtractSchema,
@@ -232,7 +233,7 @@ export const pdfToExcel: ToolHandler = async (ctx) => {
       "Převádíš tabulky z dokumentů do čistých dat pro Excel. Najdi všechny tabulky (soupisy prací, výkazy, seznamy, harmonogramy). Pro každou vrať název, stránku a sloupce. Každý řádek musí mít stejný počet buněk jako sloupců. Čísla zapisuj bez mezer mezi tisíci a s desetinnou čárkou. Sloučené buňky rozepiš, nadpisy oddílů dej do samostatného sloupce „Oddíl“, pokud existují. Nic nepřepočítávej ani nedoplňuj.",
     prompt: `${ctx.value("instructions") ? `Pokyn uživatele: ${ctx.value("instructions")}\n\n` : ""}${docs
       .filter((d) => !d.pdfBase64)
-      .map((d) => `<dokument nazev="${d.name}">\n${truncate(d.text, 100_000)}\n</dokument>`)
+      .map((d) => `<dokument nazev="${safeName(d.name)}">\n${truncate(d.text, 100_000)}\n</dokument>`)
       .join("\n")}`,
     docs: docs.filter((d) => d.pdfBase64),
     schema: z.object({

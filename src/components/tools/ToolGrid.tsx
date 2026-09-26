@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { FAVORITES, RECENT, toggleFavorite, usePref } from "@/lib/prefs";
 import { useActiveProject } from "@/lib/project/store";
+import { formatKeys, useCommands } from "../ux/hotkeys";
 import type { ToolWithSample } from "@/lib/tools/registry";
 import { CATEGORY_LABEL, type ToolCategory } from "@/lib/tools/types";
 
 const ORDER: ToolCategory[] = ["project", "documents", "checks", "site", "office"];
+
 
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -14,6 +17,27 @@ export function ToolGrid({ tools }: { tools: ToolWithSample[] }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState<ToolCategory | "all">("all");
   const [project, setProject, ready] = useActiveProject();
+  const [favorites] = usePref<string[]>(FAVORITES, []);
+  const [recent] = usePref<string[]>(RECENT, []);
+  const search = useRef<HTMLInputElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+
+  useCommands([
+    { id: "hub-search", label: "Hledat nástroj", group: "Rozcestník", keys: "/", run: () => search.current?.focus() },
+    { id: "hub-first", label: "Otevřít první výsledek hledání", group: "Rozcestník", keys: "mod+enter", run: () => (grid.current?.querySelector(".tool-card") as HTMLElement | null)?.click() },
+  ]);
+
+  /** Šipky mezi kartami nástrojů. */
+  const onGridKey = (e: React.KeyboardEvent) => {
+    if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+    const cards = [...(grid.current?.querySelectorAll<HTMLElement>(".tool-card") ?? [])];
+    const i = cards.indexOf(document.activeElement as HTMLElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const cols = Math.max(1, Math.round((grid.current!.clientWidth || 1) / (cards[0].offsetWidth + 16)));
+    const d = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key]!;
+    cards[Math.min(cards.length - 1, Math.max(0, i + d))]?.focus();
+  };
 
   const filtered = useMemo(
     () =>
@@ -64,39 +88,81 @@ export function ToolGrid({ tools }: { tools: ToolWithSample[] }) {
             </button>
           ))}
         </div>
-        <input className="input search" type="search" placeholder="Hledat nástroj…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Hledat nástroj" />
+        <input
+          ref={search}
+          className="input search"
+          type="search"
+          placeholder="Hledat nástroj…   /"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (grid.current?.querySelector(".tool-card") as HTMLElement | null)?.click();
+            if (e.key === "ArrowDown") (e.preventDefault(), (grid.current?.querySelector(".tool-card") as HTMLElement | null)?.focus());
+            if (e.key === "Escape") setQ("");
+          }}
+          aria-label="Hledat nástroj"
+        />
       </div>
 
-      {ORDER.map((c) => {
-        const list = filtered.filter((t) => t.category === c);
-        if (!list.length) return null;
-        return (
-          <section key={c} className="stack" style={{ gap: 12 }}>
-            <h2 className="eyebrow" style={{ margin: 0 }}>
-              {CATEGORY_LABEL[c]}
-            </h2>
-            <div className="grid grid--tools">
-              {list.map((t) => (
-                <Link key={t.slug} href={t.href ?? `/nastroje/${t.slug}`} className="card tool-card">
-                  <div className="row" style={{ justifyContent: "space-between" }}>
-                    <span className="tool-card__num">{t.n}</span>
-                    {t.worksWithoutAi && <span className="pill pill--ok small">i bez AI</span>}
-                  </div>
-                  <h3 className="h3">{t.title}</h3>
-                  <span className="tool-card__flow">{t.flow}</span>
-                  <p className="muted small" style={{ margin: 0 }}>
-                    {t.description}
-                  </p>
-                  <span className="tool-card__cta">
-                    {t.action} <span aria-hidden>→</span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      <div ref={grid} className="stack" style={{ gap: 28 }} onKeyDown={onGridKey}>
+        {!q && cat === "all" && (
+          <>
+            <Group title="★ Oblíbené" list={favorites.map((s) => tools.find((t) => t.slug === s)).filter(Boolean) as ToolWithSample[]} favorites={favorites} />
+            <Group title="Naposledy použité" list={recent.filter((s) => !favorites.includes(s)).map((s) => tools.find((t) => t.slug === s)).filter(Boolean).slice(0, 4) as ToolWithSample[]} favorites={favorites} />
+          </>
+        )}
+        {ORDER.map((c) => (
+          <Group key={c} title={CATEGORY_LABEL[c]} list={filtered.filter((t) => t.category === c)} favorites={favorites} />
+        ))}
+      </div>
+      <p className="small muted">
+        Tip: <kbd>{formatKeys("mod+k")}</kbd> paleta příkazů · <kbd>/</kbd> hledat · <kbd>?</kbd> všechny zkratky · šipky mezi kartami
+      </p>
       {!filtered.length && <p className="muted">Žádný nástroj neodpovídá hledání.</p>}
     </div>
+  );
+}
+
+function Group({ title, list, favorites }: { title: string; list: ToolWithSample[]; favorites: string[] }) {
+  if (!list.length) return null;
+  return (
+    <section className="stack" style={{ gap: 12 }}>
+      <h2 className="eyebrow" style={{ margin: 0 }}>
+        {title}
+      </h2>
+      <div className="grid grid--tools">
+        {list.map((t) => (
+          <Link key={t.slug} href={t.href ?? `/nastroje/${t.slug}`} className="card tool-card">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="tool-card__num">{t.n}</span>
+              <span className="row" style={{ gap: 6 }}>
+                {t.worksWithoutAi && <span className="pill pill--ok small">i bez AI</span>}
+                <button
+                  type="button"
+                  className="star"
+                  aria-pressed={favorites.includes(t.slug)}
+                  aria-label={favorites.includes(t.slug) ? `Odebrat ${t.title} z oblíbených` : `Přidat ${t.title} do oblíbených`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFavorite(t.slug);
+                  }}
+                >
+                  {favorites.includes(t.slug) ? "★" : "☆"}
+                </button>
+              </span>
+            </div>
+            <h3 className="h3">{t.title}</h3>
+            <span className="tool-card__flow">{t.flow}</span>
+            <p className="muted small" style={{ margin: 0 }}>
+              {t.description}
+            </p>
+            <span className="tool-card__cta">
+              {t.action} <span aria-hidden>→</span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

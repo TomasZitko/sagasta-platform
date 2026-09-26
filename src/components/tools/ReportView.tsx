@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { formatKeys, useCommands } from "../ux/hotkeys";
+import { toast } from "../ux/toast";
+import type { UploadedFile } from "@/lib/tools/types";
 import { ProjectIntakeSchema } from "@/lib/project/intake";
 import { saveProject } from "@/lib/project/store";
 import { reportToText, SEVERITY_LABEL, STATUS_LABEL, type Finding, type Report, type Section, type Status, type Table } from "@/lib/tools/report";
@@ -8,10 +11,49 @@ import { reportToText, SEVERITY_LABEL, STATUS_LABEL, type Finding, type Report, 
 const STATUS_PILL: Record<Status, string> = { ok: "pill--ok", inferred: "pill--warn", missing: "pill--bad" };
 const SEV_ICON = { error: "!", warning: "?", info: "i", ok: "✓" } as const;
 
-export function ReportView({ report }: { report: Report }) {
-  const [busy, setBusy] = useState<"docx" | "xlsx" | null>(null);
+type SevFilter = "all" | "error" | "warning";
+
+export function ReportView({ report, files }: { report: Report; files?: Record<string, UploadedFile[]> }) {
+  const [busy, setBusy] = useState<"docx" | "xlsx" | "zip" | null>(null);
   const [saved, setSaved] = useState(false);
+  const [sev, setSev] = useState<SevFilter>("all");
   const hasTables = Boolean(report.sheets?.length || report.sections.some((s) => s.table));
+  const findingCount = useMemo(() => report.sections.reduce((n, s) => n + (s.findings?.length ?? 0), 0), [report]);
+  const sections = useMemo(
+    () => (sev === "all" ? report.sections : report.sections.map((s) => (s.findings ? { ...s, findings: s.findings.filter((f) => f.severity === sev) } : s))),
+    [report, sev],
+  );
+
+  async function downloadZip() {
+    if (!report.renames?.length || !files) return;
+    setBusy("zip");
+    try {
+      const { zipSync, strToU8 } = await import("fflate");
+      const all = Object.values(files).flat();
+      const entries: Record<string, Uint8Array> = {};
+      for (const r of report.renames) {
+        const f = all.find((x) => x.name === r.from);
+        if (f) entries[r.to] = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
+      }
+      entries["_prejmenovani.csv"] = strToU8("\ufeffPůvodní;Nový\r\n" + report.renames.map((r) => `"${r.from}";"${r.to}"`).join("\r\n"));
+      download(new Blob([zipSync(entries, { level: 6 }) as BlobPart], { type: "application/zip" }), "Prejmenovane_soubory.zip");
+      toast(`ZIP s ${report.renames.length} soubory stažen`, "good");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  useCommands(
+    [
+      { id: "r-docx", label: "Stáhnout Word", group: "Výsledek", keys: "mod+shift+e", run: () => void exportAs("docx") },
+      ...(hasTables ? [{ id: "r-xlsx", label: "Stáhnout Excel", group: "Výsledek", keys: "mod+shift+x", run: () => void exportAs("xlsx") }] : []),
+      { id: "r-copy", label: "Kopírovat výsledek jako text", group: "Výsledek", keys: "mod+shift+c", run: () => void copy(reportToText(report), "Výsledek zkopírován") },
+      { id: "r-print", label: "Tisk / uložit jako PDF", group: "Výsledek", keys: "mod+shift+p", run: () => window.print() },
+      ...(report.renames?.length ? [{ id: "r-zip", label: "Stáhnout přejmenované soubory (ZIP)", group: "Výsledek", keys: "mod+shift+z", run: () => void downloadZip() }] : []),
+      { id: "r-top", label: "Přejít na začátek výsledku", group: "Výsledek", keys: "alt+r", run: () => document.querySelector(".report")?.scrollIntoView({ behavior: "smooth" }) },
+    ],
+    [report],
+  );
 
   async function exportAs(kind: "docx" | "xlsx") {
     setBusy(kind);
@@ -20,8 +62,9 @@ export function ReportView({ report }: { report: Report }) {
       if (!res.ok) throw new Error();
       const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? `SAGASTA.${kind}`;
       download(await res.blob(), name);
+      toast(`Staženo: ${name}`, "good");
     } catch {
-      alert(`Export ${kind.toUpperCase()} selhal.`);
+      toast(`Export ${kind.toUpperCase()} selhal.`, "bad");
     } finally {
       setBusy(null);
     }
@@ -32,6 +75,7 @@ export function ReportView({ report }: { report: Report }) {
     if (parsed.success) {
       saveProject(parsed.data);
       setSaved(true);
+      toast("Aktivní projekt uložen – ostatní nástroje ho použijí", "good");
     }
   }
 
@@ -47,14 +91,22 @@ export function ReportView({ report }: { report: Report }) {
           </h2>
           {report.subtitle && <p className="muted" style={{ margin: 0 }}>{report.subtitle}</p>}
         </div>
-        <div className="row">
-          <CopyButton text={reportToText(report)} label="Kopírovat text" />
+        <div className="row no-print">
+          <CopyButton text={reportToText(report)} label="Kopírovat text" title={formatKeys("mod+shift+c")} />
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => window.print()} title={formatKeys("mod+shift+p")}>
+            ⎙ Tisk / PDF
+          </button>
+          {report.renames?.length ? (
+            <button type="button" className="btn btn--primary btn--sm" onClick={() => void downloadZip()} disabled={busy !== null} title={formatKeys("mod+shift+z")}>
+              {busy === "zip" ? <span className="spinner" aria-hidden /> : "↓"} ZIP přejmenovaných
+            </button>
+          ) : null}
           {hasTables && (
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => exportAs("xlsx")} disabled={busy !== null}>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => exportAs("xlsx")} disabled={busy !== null} title={formatKeys("mod+shift+x")}>
               {busy === "xlsx" ? <span className="spinner" aria-hidden /> : "↓"} Excel
             </button>
           )}
-          <button type="button" className="btn btn--accent btn--sm" onClick={() => exportAs("docx")} disabled={busy !== null}>
+          <button type="button" className="btn btn--accent btn--sm" onClick={() => exportAs("docx")} disabled={busy !== null} title={formatKeys("mod+shift+e")}>
             {busy === "docx" ? <span className="spinner" aria-hidden /> : "↓"} Word
           </button>
         </div>
@@ -110,7 +162,33 @@ export function ReportView({ report }: { report: Report }) {
         </div>
       )}
 
-      {report.letter ? <LetterView report={report} /> : report.sections.map((s) => <SectionView key={s.id} s={s} />)}
+      {!report.letter && (report.sections.length > 3 || findingCount > 5) && (
+        <nav className="toc no-print" aria-label="Obsah výsledku">
+          {report.sections.length > 3 &&
+            report.sections.map((s) => (
+              <a key={s.id} href={`#sec-${s.id}`} className="toc__link" data-status={s.status}>
+                {s.title}
+              </a>
+            ))}
+          {findingCount > 5 && (
+            <div className="segmented toc__filter" role="group" aria-label="Filtr zjištění">
+              {(
+                [
+                  ["all", "Vše"],
+                  ["error", "Chyby"],
+                  ["warning", "Upozornění"],
+                ] as [SevFilter, string][]
+              ).map(([id, l]) => (
+                <button key={id} type="button" aria-pressed={sev === id} onClick={() => setSev(id)}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+        </nav>
+      )}
+
+      {report.letter ? <LetterView report={report} /> : sections.map((s) => <SectionView key={s.id} s={s} />)}
 
       {report.questions.length > 0 && (
         <div className="card card--pad stack" style={{ gap: 10 }}>
@@ -136,7 +214,7 @@ export function ReportView({ report }: { report: Report }) {
 
 function SectionView({ s }: { s: Section }) {
   return (
-    <section className="card card--pad section-card" data-status={s.status}>
+    <section className="card card--pad section-card" data-status={s.status} id={`sec-${s.id}`}>
       <div className="section-card__head">
         <h3 className="h3">{s.title}</h3>
         {s.status && (
@@ -214,8 +292,13 @@ function TableView({ t }: { t: Table }) {
   const limit = 60;
   const rows = expanded ? t.rows : t.rows.slice(0, limit);
   if (!t.rows.length) return <p className="muted small">Žádné položky.</p>;
+  const tsv = [t.columns, ...t.rows].map((r) => r.map((c) => String(c ?? "").replace(/[\t\n]+/g, " ")).join("\t")).join("\n");
   return (
     <div>
+      <div className="table-tools no-print">
+        <span className="muted small">{t.rows.length} řádků</span>
+        <CopyButton text={tsv} label="Kopírovat pro Excel" />
+      </div>
       <div className="table-wrap" tabIndex={0} role="region" aria-label={t.name ?? "Tabulka"}>
         <table className="table">
           <thead>
@@ -268,19 +351,28 @@ function highlightGaps(text: string) {
   return parts.map((p, i) => (p.startsWith("[DOPLNIT") ? <mark key={i}>{p}</mark> : <span key={i}>{p}</span>));
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+async function copy(text: string, msg = "Zkopírováno"): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(msg, "good");
+    return true;
+  } catch {
+    toast("Schránka není dostupná", "bad");
+    return false;
+  }
+}
+
+function CopyButton({ text, label, title }: { text: string; label: string; title?: string }) {
   const [done, setDone] = useState(false);
   return (
     <button
       type="button"
       className="btn btn--ghost btn--sm"
+      title={title}
       onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
+        if (await copy(text)) {
           setDone(true);
           setTimeout(() => setDone(false), 1600);
-        } catch {
-          /* schránka nedostupná */
         }
       }}
     >

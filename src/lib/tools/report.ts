@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * Jednotný výstupní model všech nástrojů.
  *
@@ -65,6 +67,8 @@ export interface Report {
   project?: unknown;
   /** Tabulky určené k exportu do Excelu jako samostatné listy. */
   sheets?: Table[];
+  /** Návrh přejmenování souborů (nástroj Pojmenování) – klient z nich sestaví ZIP. */
+  renames?: { from: string; to: string }[];
   /** Dokument je dopis – DOCX se vysází jako korespondence. */
   letter?: {
     recipient: string;
@@ -142,4 +146,52 @@ export function reportToText(r: Report): string {
   if (r.letter) out.push("", r.letter.signature);
   if (r.questions.length) out.push("", "OTÁZKY", ...r.questions.map((q, i) => `${i + 1}. ${q}`));
   return out.join("\n");
+}
+
+/* ——— Validace reportu pro export (vstup od klienta) ——— */
+
+const Str = (max: number) => z.string().max(max);
+const TableSchema = z.object({
+  name: Str(300).optional(),
+  columns: z.array(Str(300)).max(40),
+  rows: z.array(z.array(Str(20_000)).max(40)).max(5000),
+  rowTones: z.array(z.enum(["default", "good", "warn", "bad", "accent"])).max(5000).optional(),
+});
+const FindingSchema = z.object({ severity: z.enum(["error", "warning", "info", "ok"]), title: Str(2000), detail: Str(20_000).optional(), evidence: Str(20_000).optional() });
+
+export const ReportSchema = z.object({
+  tool: Str(80),
+  title: Str(500),
+  subtitle: Str(2000).optional(),
+  generatedAt: Str(40),
+  mode: z.enum(["ai", "rules"]),
+  model: Str(80).nullable(),
+  meta: z.array(z.object({ label: Str(200), value: Str(5000) })).max(50),
+  summary: Str(50_000).optional(),
+  stats: z.array(z.object({ label: Str(200), value: z.union([Str(200), z.number()]), tone: z.enum(["default", "good", "warn", "bad", "accent"]).optional() })).max(20),
+  sections: z
+    .array(
+      z.object({
+        id: Str(80),
+        title: Str(500),
+        status: z.enum(["ok", "inferred", "missing"]).optional(),
+        body: Str(200_000).optional(),
+        bullets: z.array(Str(20_000)).max(500).optional(),
+        table: TableSchema.optional(),
+        findings: z.array(FindingSchema).max(1000).optional(),
+        gaps: z.array(Str(5000)).max(200).optional(),
+      }),
+    )
+    .max(300),
+  notes: z.array(Str(2000)).max(50),
+  questions: z.array(Str(2000)).max(100),
+  project: z.unknown().optional(),
+  sheets: z.array(TableSchema).max(30).optional(),
+  renames: z.array(z.object({ from: Str(300), to: Str(300) })).max(100).optional(),
+  letter: z.object({ recipient: Str(1000), subject: Str(1000), reference: Str(300), signature: Str(1000) }).optional(),
+});
+
+/** Ochrana proti vzorcové injekci v tabulkových procesorech (CSV/XLSX). */
+export function neutralizeFormula(v: string): string {
+  return /^[=+\-@\t\r]/.test(v) && !/^-?\d+([.,]\d+)?$/.test(v.trim()) ? `'${v}` : v;
 }

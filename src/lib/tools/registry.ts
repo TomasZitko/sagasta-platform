@@ -61,11 +61,34 @@ const SAMPLE_BOQ = `Kód\tPopis\tMJ\tMnožství\tJ. cena\tCena celkem
 921111111\tOchranné zábradlí\tm\t52\t\t
 966071822\tBourání ocelové NK\tt\t95\t2900\t255000`;
 
+const MEETING_TRANSCRIPT =
+  "Novák: potřebujeme mít do konce října upravený výkres volného prostoru pod mostem, Povodí chce doložit průtočný profil.\nDvořáková: to zvládneme do 20. října, pošleme i hydrotechnické posouzení.\nSvoboda: my bychom potřebovali vědět, jestli výluka v listopadu platí. Jinak nestihneme objednat jeřáb.\nNovák: výluka 14.–16. listopadu je potvrzená, písemně pošlu zítra.\nKrál: pozor, na stavbě pořád chybí aktualizovaný plán BOZP, koordinátor to minule vytýkal.\nSvoboda: plán dodáme do pátku.\nDvořáková: otevřená otázka je přeložka kabelů PS 01 – správce se zatím nevyjádřil.\nPříští porada 8. října v 9:00 na stavbě.";
+
+const SAMPLE_LAVKA = `TECHNICKÁ ZPRÁVA – Lávka pro pěší přes Berounku v Radotíně (2019)
+Založení: opěry založeny na mikropilotách délky 9 m, hladina podzemní vody 1,2 m pod terénem – během vrtání pažení výpažnicí, čerpání z jímky.
+Nosná konstrukce: ocelová příhradová, rozpětí 42 m, šířka 3,5 m.
+Postup výstavby: montáž NK z pontonů v období nízkých průtoků, povodňový plán odsouhlasen Povodím Vltavy.`;
+
+const PHOTO_ACCEPT = ".jpg,.jpeg,.png,.webp";
+
 export const TOOLS: ToolWithSample[] = [
+  {
+    slug: "copilot",
+    href: "/copilot",
+    n: "",
+    title: "Projektový Copilot",
+    flow: "Otázka → Odpověď z dokumentů projektu",
+    description: "Konverzace nad aktivním projektem a lokální knihovnou dokumentů: co se změnilo, co chybí, kde je co uvedeno – s odkazy na zdroje a rychlými akcemi do nástrojů.",
+    category: "project",
+    inputs: [],
+    usesProject: true,
+    worksWithoutAi: true,
+    action: "Otevřít Copilot",
+  },
   {
     slug: "katalog-nebezpeci",
     href: "/katalog-nebezpeci",
-    n: "01",
+    n: "",
     title: "Katalog nebezpečí",
     flow: "Stavba → Katalog nebezpečí",
     description: "Řízený katalog nebezpečí s hodnocením P×Z, opatřeními a předpisy. Upozorní na chybějící kategorie a povinnosti dle zák. 309/2006 Sb.",
@@ -77,7 +100,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "extrakce-dat",
-    n: "02",
+    n: "",
     title: "Extrakce dat projektu",
     flow: "PDF dokumentace → Data projektu",
     description: "Z dokumentace vytáhne identifikaci stavby, účastníky, objekty, rozměry, termíny a technologie. Uloží je jako aktivní projekt pro všechny ostatní nástroje.",
@@ -93,7 +116,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "technicka-zprava",
-    n: "03",
+    n: "",
     title: "Technická zpráva",
     flow: "Data projektu → Technická zpráva",
     description: "Návrh technické zprávy objektu po sekcích. Každá sekce nese stav: nalezeno / odvozeno / chybí, a seznam údajů k doplnění.",
@@ -117,7 +140,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "zov",
-    n: "04",
+    n: "",
     title: "Zásady organizace výstavby",
     flow: "Data projektu → ZOV",
     description: "Návrh zásad organizace výstavby ve všech povinných okruzích – doprava, zábory, odpady, bilance zemin, DIO, BOZP, postup výstavby.",
@@ -140,17 +163,13 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "technologicky-postup",
-    n: "05",
-    title: "Technologický postup / postup bourání",
+    n: "",
+    title: "Technologický postup",
     flow: "Činnost → Technologický postup",
-    description: "První návrh technologického postupu nebo postupu bourání – kroky, kontrolní body, stroje, odpady. Bezpečnost je navázaná na řízenou knihovnu nebezpečí.",
+    description: "První návrh technologického postupu – příprava, kroky, kontrolní body, stroje, kvalita. Bezpečnost je navázaná na řízenou knihovnu nebezpečí.",
     category: "site",
     inputs: [
-      { kind: "select", id: "mode", label: "Typ dokumentu", options: [
-        { value: "tech", label: "Technologický postup" },
-        { value: "demolition", label: "Postup bourání" },
-      ] },
-      { kind: "line", id: "activity", label: "Činnost", placeholder: "Betonáž mostovky / Bourání ocelové NK", required: true },
+      { kind: "line", id: "activity", label: "Činnost", placeholder: "Betonáž mostovky", required: true },
       { kind: "line", id: "object", label: "Objekt", placeholder: "SO 201" },
       { kind: "text", id: "conditions", label: "Podmínky a omezení", rows: 4 },
       { kind: "files", id: "docs", label: "Podklady", accept: DOC_ACCEPT, max: 10 },
@@ -159,7 +178,28 @@ export const TOOLS: ToolWithSample[] = [
     worksWithoutAi: false,
     action: "Vygenerovat postup",
     sample: {
-      mode: "demolition",
+      activity: "Betonáž spřažené mostovky",
+      object: "SO 201",
+      conditions: "Beton C30/37 XF2, objem cca 180 m³, betonáž v jednom záběru čerpadlem. Noční výluka sousední koleje. Letní období – ošetřování betonu.",
+    },
+  },
+  {
+    slug: "postup-bourani",
+    n: "",
+    title: "Postup bourání",
+    flow: "Bouraná konstrukce → Postup bourání",
+    description: "Sled bourání, dočasné zajištění stability, mechanizace, ochrana okolí a třídění odpadů. Rizika navázaná na knihovnu nebezpečí.",
+    category: "site",
+    inputs: [
+      { kind: "line", id: "activity", label: "Bouraná konstrukce", placeholder: "Ocelová nosná konstrukce mostu", required: true },
+      { kind: "line", id: "object", label: "Objekt", placeholder: "SO 201" },
+      { kind: "text", id: "conditions", label: "Stav konstrukce, okolí a omezení", rows: 5 },
+      { kind: "files", id: "docs", label: "Průzkumy a výkresy", accept: DOC_ACCEPT, max: 10 },
+    ],
+    usesProject: true,
+    worksWithoutAi: false,
+    action: "Vygenerovat postup bourání",
+    sample: {
       activity: "Bourání ocelové nýtované nosné konstrukce",
       object: "SO 201",
       conditions: "Sousední kolej v provozu, elektrizovaná trať 3 kV. Pod mostem Berounka. Nátěry pravděpodobně s olovem. Hmotnost NK cca 95 t, rozpětí 24 m. Demontáž autojeřábem 250 t v noční výluce.",
@@ -167,7 +207,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "kontrola-konzistence",
-    n: "06",
+    n: "",
     title: "Kontrola konzistence",
     flow: "Všechny dokumenty → Rozpory",
     description: "Porovná dokumenty mezi sebou: rozdílné plochy, objemy, termíny, objekty uvedené jen v části dokumentace, nesoulad materiálů.",
@@ -182,7 +222,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "chybejici-informace",
-    n: "07",
+    n: "",
     title: "Detektor chybějících informací",
     flow: "Dokument → Chybějící údaje + otázky",
     description: "Před odevzdáním najde nevyplněná místa, chybějící povinné údaje a vágní formulace. Vygeneruje seznam otázek pro projektanta.",
@@ -208,7 +248,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "kontrola-struktury",
-    n: "08",
+    n: "",
     title: "Kontrola požadované struktury",
     flow: "Dokumentace → Kontrola úplnosti dle osnovy",
     description: "Porovná dokumentaci s řízenou databází povinných částí (povolení stavby, TZ, ZOV) a ukáže, co chybí nebo je jen formálně.",
@@ -232,7 +272,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "porovnani-revizi",
-    n: "09",
+    n: "",
     title: "Porovnání revizí",
     flow: "Verze A + Verze B → Co se změnilo",
     description: "Porovná dvě verze dokumentu: přidané, odebrané a změněné pasáže, změny objektů a čísel. AI vyhodnotí technické dopady změn.",
@@ -248,7 +288,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "pripominky",
-    n: "10",
+    n: "",
     title: "Registr připomínek",
     flow: "Připomínky klienta → Registr + kontrola vypořádání",
     description: "Rozloží připomínky na jednotlivé požadavky s akcí, dokumentem a prioritou. S novou revizí ověří, které připomínky jsou skutečně vypořádané.",
@@ -268,7 +308,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "zapis-z-jednani",
-    n: "11",
+    n: "",
     title: "Zápis z jednání a úkoly",
     flow: "Poznámky / přepis → Zápis + úkoly",
     description: "Z přepisu nahrávky nebo poznámek sestaví oficiální zápis: účastníci, projednané body, rozhodnutí, úkoly s termíny a otevřené otázky.",
@@ -287,13 +327,12 @@ export const TOOLS: ToolWithSample[] = [
       title: "Koordinační porada – SO 201",
       date: "2026-09-24",
       participants: "Novák (SŽ), Dvořáková (SAGASTA), Svoboda (zhotovitel), Král (TDS)",
-      transcript:
-        "Novák: potřebujeme mít do konce října upravený výkres volného prostoru pod mostem, Povodí chce doložit průtočný profil.\nDvořáková: to zvládneme do 20. října, pošleme i hydrotechnické posouzení.\nSvoboda: my bychom potřebovali vědět, jestli výluka v listopadu platí. Jinak nestihneme objednat jeřáb.\nNovák: výluka 14.–16. listopadu je potvrzená, písemně pošlu zítra.\nKrál: pozor, na stavbě pořád chybí aktualizovaný plán BOZP, koordinátor to minule vytýkal.\nSvoboda: plán dodáme do pátku.\nDvořáková: otevřená otázka je přeložka kabelů PS 01 – správce se zatím nevyjádřil.\nPříští porada 8. října v 9:00 na stavbě.",
+      transcript: MEETING_TRANSCRIPT,
     },
   },
   {
     slug: "email-ukol",
-    n: "12",
+    n: "",
     title: "E-mail → úkol",
     flow: "E-mail → Úkol s prioritou a termínem",
     description: "Z přeposlaného e-mailu pozná požadavky, určí projekt, prioritu, termín a navrhne úkoly i odpověď odesílateli.",
@@ -311,30 +350,24 @@ export const TOOLS: ToolWithSample[] = [
     },
   },
   {
-    slug: "korespondence",
-    n: "13",
-    title: "Korespondence a RFI",
-    flow: "Poznámky → Formální dopis / RFI",
-    description: "Z hrubých poznámek připraví dotaz na upřesnění (RFI), formální odpověď klientovi nebo vyjádření pro úřad – ve firemním stylu, s odkazy a termínem.",
+    slug: "rfi",
+    n: "",
+    title: "Technický dotaz (RFI)",
+    flow: "Problém → Formální RFI",
+    description: "Z krátkého popisu problému připraví formální dotaz: kontext, očíslované otázky, dopad při nevyřešení, odkazy a termín odpovědi.",
     category: "office",
     inputs: [
-      { kind: "select", id: "mode", label: "Typ", options: [
-        { value: "rfi", label: "Technický dotaz (RFI)" },
-        { value: "reply", label: "Odpověď klientovi / zhotoviteli" },
-        { value: "authority", label: "Odpověď úřadu / dotčenému orgánu" },
-      ] },
       { kind: "line", id: "recipient", label: "Adresát", placeholder: "Správa železnic, OŘ Praha – ing. Novák" },
       { kind: "line", id: "reference", label: "Značka / věc (volitelné)" },
       { kind: "date", id: "due", label: "Požadovaný termín odpovědi" },
       { kind: "text", id: "notes", label: "Vaše poznámky", rows: 6, required: true, placeholder: "Klidně stručně a neformálně – nástroj je převede do formálního textu." },
-      { kind: "files", id: "docs", label: "Související dokumenty (např. výzva úřadu)", accept: DOC_ACCEPT, max: 5 },
+      { kind: "files", id: "docs", label: "Související dokumenty", accept: DOC_ACCEPT, max: 5 },
       { kind: "line", id: "signature", label: "Podpis", placeholder: "Ing. Jana Dvořáková, hlavní inženýr projektu" },
     ],
     usesProject: true,
     worksWithoutAi: false,
-    action: "Připravit text",
+    action: "Připravit RFI",
     sample: {
-      mode: "rfi",
       recipient: "Správa železnic, OŘ Praha – ing. Petr Novák",
       due: "2026-10-10",
       notes: "nevíme přesně kde vede kabel SŽ u opěry 2, v podkladech je na 2 místech jinak (situace vs. vyjádření správce). potřebujeme vytyčení nebo sondu, jinak nemůžeme navrhnout mikropiloty. bez toho posun termínu DSP.",
@@ -342,8 +375,58 @@ export const TOOLS: ToolWithSample[] = [
     },
   },
   {
+    slug: "odpoved-uradu",
+    n: "",
+    title: "Odpověď úřadu",
+    flow: "Výzva úřadu → Vyjádření bod po bodu",
+    description: "K výzvě stavebního úřadu nebo dotčeného orgánu připraví strukturované vyjádření s odkazy na části dokumentace – v úředním stylu.",
+    category: "office",
+    inputs: [
+      { kind: "line", id: "recipient", label: "Adresát", placeholder: "Městský úřad Beroun, odbor výstavby" },
+      { kind: "line", id: "reference", label: "Značka / věc (volitelné)" },
+      { kind: "date", id: "due", label: "Požadovaný termín odpovědi" },
+      { kind: "text", id: "notes", label: "Vaše poznámky", rows: 6, required: true, placeholder: "Klidně stručně a neformálně – nástroj je převede do formálního textu." },
+      { kind: "files", id: "docs", label: "Související dokumenty", accept: DOC_ACCEPT, max: 5 },
+      { kind: "line", id: "signature", label: "Podpis", placeholder: "Ing. Jana Dvořáková, hlavní inženýr projektu" },
+    ],
+    usesProject: true,
+    worksWithoutAi: false,
+    action: "Připravit vyjádření",
+    sample: {
+      recipient: "Městský úřad Beroun, odbor výstavby a územního plánování",
+      reference: "MBE/12345/2026",
+      due: "2026-10-20",
+      notes: "úřad chce: 1) doplnit vyjádření Povodí Vltavy – máme, pošleme v příloze (vyjádření z 2.9.2026), 2) upřesnit dočasný zábor p.č. 512/3 – je v ZOV kap. z6, 1800 m2 na 8 měsíců, 3) doložit souhlas vlastníka pozemku – jednáme, doložíme do 15.10.",
+      signature: "Ing. Jana Dvořáková, zástupce stavebníka na základě plné moci",
+    },
+  },
+  {
+    slug: "korespondence",
+    n: "",
+    title: "Formální odpověď",
+    flow: "Poznámky → Formální dopis",
+    description: "Z hrubých poznámek („nejde to, protože…“) připraví formální odpověď klientovi nebo zhotoviteli: stanovisko, důvody a požadované rozhodnutí.",
+    category: "office",
+    inputs: [
+      { kind: "line", id: "recipient", label: "Adresát", placeholder: "Stavby Alfa a.s. – ing. Svoboda" },
+      { kind: "line", id: "reference", label: "Značka / věc (volitelné)" },
+      { kind: "date", id: "due", label: "Požadovaný termín odpovědi" },
+      { kind: "text", id: "notes", label: "Vaše poznámky", rows: 6, required: true, placeholder: "Klidně stručně a neformálně – nástroj je převede do formálního textu." },
+      { kind: "files", id: "docs", label: "Související dokumenty", accept: DOC_ACCEPT, max: 5 },
+      { kind: "line", id: "signature", label: "Podpis", placeholder: "Ing. Jana Dvořáková, hlavní inženýr projektu" },
+    ],
+    usesProject: true,
+    worksWithoutAi: false,
+    action: "Připravit dopis",
+    sample: {
+      recipient: "Stavby Alfa a.s. – ing. Martin Svoboda, stavbyvedoucí",
+      notes: "posun opěry o 0,5 m jak chtějí nejde – kabel SŽ v cestě a změnila by se statika mikropilot. buď přeložka kabelu (správce musí souhlasit, cca 3 měsíce) nebo nechat podle PD. potřebujeme rozhodnutí investora do konce týdne.",
+      signature: "Ing. Jana Dvořáková, hlavní inženýr projektu",
+    },
+  },
+  {
     slug: "porovnani-nabidek",
-    n: "14",
+    n: "",
     title: "Porovnání nabídek",
     flow: "Nabídky A, B, C → Srovnávací tabulka",
     description: "Z nabídek vytáhne cenu, termín, technické řešení, výluky z plnění, odchylky od zadání a chybějící údaje do jedné srovnatelné tabulky. Nevybírá vítěze.",
@@ -366,7 +449,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "kontrola-vykazu",
-    n: "15",
+    n: "",
     title: "Kontrola výkazu výměr",
     flow: "Výkaz výměr + dokumentace → Nesrovnalosti",
     description: "Najde duplicitní položky, nulová množství, chybné součiny a jednotky. S dokumentací porovná množství a chybějící položky.",
@@ -384,7 +467,7 @@ export const TOOLS: ToolWithSample[] = [
   },
   {
     slug: "pdf-excel",
-    n: "16",
+    n: "",
     title: "PDF → Excel",
     flow: "Tabulky v PDF → Strukturovaný Excel",
     description: "Najde tabulky v PDF (položky, množství, jednotky, ceny, ID), převede je do čistých sloupců a stáhne jako XLSX.",
@@ -398,6 +481,223 @@ export const TOOLS: ToolWithSample[] = [
     action: "Převést do Excelu",
     sampleFiles: { docs: [{ name: "Soupis_praci.txt", text: SAMPLE_BOQ.replace(/\t/g, "    ") }] },
   },
+  {
+    slug: "stary-novy-projekt",
+    n: "",
+    title: "Starý projekt → nový projekt",
+    flow: "Předchozí dokument + nová fakta → adaptovaný návrh",
+    description: "Převezme strukturu a styl dokumentu z podobného projektu a nahradí místo, investora, objekty, rozměry, technologie a termíny. Ukáže, kolik lze převzít.",
+    category: "documents",
+    inputs: [
+      { kind: "files", id: "old", label: "Dokument ze starého projektu", required: true, accept: DOC_ACCEPT, max: 3 },
+      { kind: "text", id: "newFacts", label: "Údaje nového projektu", rows: 6, placeholder: "Název, místo, investor, objekty, rozměry, technologie, termíny… (doplňují aktivní projekt)" },
+    ],
+    usesProject: true,
+    worksWithoutAi: true,
+    action: "Adaptovat dokument",
+    sample: {
+      newFacts:
+        "Nová stavba: Rekonstrukce mostu ev. č. 3-117 přes Litavku v Berouně. Investor: Krajská správa a údržba silnic Středočeského kraje. Silniční most, jedno pole, rozpětí 18,0 m, šířka 9,5 m. Založení plošné na skalním podloží. Objekty SO 101 Most, SO 102 Úprava komunikace. Doba výstavby 120 pracovních dní, zahájení 04/2028. Úplná uzavírka silnice II/116.",
+    },
+    sampleFiles: { old: [{ name: "TZ_SO201_Karlstejn.txt", text: SAMPLE_TZ }] },
+  },
+  {
+    slug: "vyhledavani",
+    n: "",
+    title: "Vyhledávání v projektech",
+    flow: "Dotaz → Pasáže z předchozích projektů",
+    description: "Fulltextově prohledá dokumenty předchozích projektů (i z lokální knihovny) a vrátí nejrelevantnější pasáže. AI z nich sestaví odpověď s odkazy.",
+    category: "project",
+    inputs: [
+      { kind: "line", id: "query", label: "Co hledáte", placeholder: "Založení na mikropilotách u podzemní vody", required: true },
+      { kind: "files", id: "docs", label: "Prohledávané dokumenty", hint: "Nahrajte nebo vyberte z knihovny (⌘/Ctrl+L)", required: true, accept: DOC_ACCEPT, max: 30 },
+    ],
+    usesProject: false,
+    worksWithoutAi: true,
+    action: "Hledat",
+    sample: { query: "založení mikropiloty podzemní voda" },
+    sampleFiles: { docs: [{ name: "TZ_SO201_Karlstejn.txt", text: SAMPLE_TZ }, { name: "ZOV_Karlstejn.txt", text: SAMPLE_ZOV }, { name: "BOZP_Karlstejn.txt", text: SAMPLE_BOZP }, { name: "TZ_Lavka_Radotin.txt", text: SAMPLE_LAVKA }] },
+  },
+  {
+    slug: "kontrolni-den",
+    n: "",
+    title: "Zápis z kontrolního dne",
+    flow: "Fotky + hlasová poznámka → Zápis z KD",
+    description: "Z fotografií a poznámek sestaví zápis z kontrolního dne: postup prací, BOZP, kvalita, zjištění s nápravnými opatřeními a popsaná fotodokumentace.",
+    category: "site",
+    inputs: [
+      { kind: "files", id: "photos", label: "Fotografie ze stavby", hint: "Lze i vložit ze schránky (⌘/Ctrl+V). Fotky se před odesláním zmenší.", accept: PHOTO_ACCEPT, max: 20 },
+      { kind: "text", id: "notes", label: "Poznámky / přepis hlasové poznámky", rows: 6 },
+      { kind: "date", id: "date", label: "Datum" },
+      { kind: "line", id: "object", label: "Objekt / úsek", placeholder: "SO 201" },
+      { kind: "line", id: "weather", label: "Počasí", placeholder: "polojasno, 14 °C" },
+      { kind: "line", id: "participants", label: "Účastníci" },
+    ],
+    usesProject: true,
+    worksWithoutAi: false,
+    action: "Sestavit zápis",
+    sample: {
+      date: "2026-09-24",
+      object: "SO 201 Železniční most",
+      weather: "zataženo, 12 °C",
+      participants: "Král (TDS), Svoboda (zhotovitel), Dvořáková (AD)",
+      notes:
+        "Výkop pro opěru 2 hotový, pažení štětovnicemi, čerpání vody běží. U hrany výkopu chybí zábradlí v délce cca 6 m na straně ke koleji. Skládka výztuže blokuje příjezd k opěře 1. Mikropiloty opěry 1 dokončeny, zkoušky únosnosti čekají na protokol. Oplocení staveniště u vjezdu poškozené. Příští KD 1. 10.",
+    },
+  },
+  {
+    slug: "foto-problemy",
+    n: "",
+    title: "Fotografie → možné problémy",
+    flow: "Fotky ze stavby → Možné nedostatky",
+    description: "Projde fotografie a označí možné problémy BOZP, organizace, kvality a životního prostředí – vždy jako „možný problém k ověření“, navázané na knihovnu nebezpečí.",
+    category: "site",
+    inputs: [
+      { kind: "files", id: "photos", label: "Fotografie", required: true, hint: "JPG, PNG, WEBP · lze vložit ze schránky", accept: PHOTO_ACCEPT, max: 30 },
+      { kind: "line", id: "context", label: "Kontext (volitelné)", placeholder: "Výkop opěry 2, práce u koleje" },
+    ],
+    usesProject: false,
+    worksWithoutAi: false,
+    action: "Analyzovat fotky",
+  },
+  {
+    slug: "soupis-vad",
+    n: "",
+    title: "Soupis vad a nedodělků",
+    flow: "Fotky + poznámky → Punch list",
+    description: "Z prohlídky sestaví soupis vad a nedodělků po objektech s místem, odstraněním, odpovědností, prioritou a termínem. Export do Excelu.",
+    category: "site",
+    inputs: [
+      { kind: "text", id: "notes", label: "Poznámky z prohlídky", rows: 8, placeholder: "SO 201\n- dokončit zábradlí na levé římse\n- oprava nátěru…" },
+      { kind: "files", id: "photos", label: "Fotografie", accept: PHOTO_ACCEPT, max: 30 },
+      { kind: "line", id: "deadline", label: "Obecný termín odstranění", placeholder: "do 30 dnů od převzetí" },
+    ],
+    usesProject: true,
+    worksWithoutAi: true,
+    action: "Sestavit soupis",
+    sample: {
+      deadline: "do 15. 11. 2027",
+      notes:
+        "SO 201 Železniční most\n- dokončit zábradlí na levé římse v délce 8 m\n- oprava poškozeného nátěru zábradlí u opěry 1\n- odstranit zbytky bednění pod NK\n- doplnit označení mostu (evidenční číslo)\nSO 202 Opěrné zdi\n- vyspravit trhliny v římse OZ2\n- vyčistit odvodňovací žlab\nPS 01\n- doložit protokol o převzetí přeložky kabelů",
+    },
+  },
+  {
+    slug: "predavaci-dokumentace",
+    n: "",
+    title: "Předávací dokumentace",
+    flow: "Doklady → Kontrola úplnosti k předání",
+    description: "Porovná předávané doklady s kontrolním seznamem pro daný druh stavby (DSPS, zaměření, zkoušky, revize, odpady, prohlídka mostu…) a označí, co chybí.",
+    category: "site",
+    inputs: [
+      { kind: "files", id: "docs", label: "Předávané doklady", accept: DOC_ACCEPT, max: 50 },
+      { kind: "text", id: "list", label: "…nebo seznam dokladů", rows: 6 },
+    ],
+    usesProject: true,
+    worksWithoutAi: true,
+    action: "Zkontrolovat doklady",
+    sample: {
+      list: "Dokumentace skutečného provedení SO 201, SO 202\nGeodetické zaměření skutečného provedení\nStavební deník č. 1–3\nProtokoly o zkouškách betonu\nProhlášení o vlastnostech – výztuž, beton, izolace\nZápis o předání a převzetí díla (koncept)\nEvidence odpadů – vážní lístky",
+    },
+  },
+  {
+    slug: "technicka-specifikace",
+    n: "",
+    title: "Technická specifikace",
+    flow: "Materiál + požadavky → Technická specifikace",
+    description: "Výrobkově neutrální specifikace materiálu či výrobku: vlastnosti, zabudování, kontrola kvality, přejímka a doklady.",
+    category: "documents",
+    inputs: [
+      { kind: "line", id: "product", label: "Materiál / výrobek", placeholder: "Hydroizolace mostovky z asfaltových pásů", required: true },
+      { kind: "line", id: "element", label: "Konstrukce / objekt", placeholder: "SO 201 – mostovka" },
+      { kind: "text", id: "requirements", label: "Požadované vlastnosti a podmínky", rows: 5 },
+      { kind: "files", id: "docs", label: "Podklady", accept: DOC_ACCEPT, max: 10 },
+    ],
+    usesProject: true,
+    worksWithoutAi: false,
+    action: "Vygenerovat specifikaci",
+    sample: {
+      product: "Izolační systém mostovky z modifikovaných asfaltových pásů",
+      element: "SO 201 – mostovka železničního mostu",
+      requirements: "Plnoplošně natavovaný pás tl. min. 5 mm, odolnost proti prorážení, pod štěrkové lože. Ochranná vrstva z litého asfaltu. Provádění při teplotě podkladu min. +5 °C, vlhkost betonu max. 4 %. Přídržnost k podkladu min. 0,4 MPa.",
+    },
+  },
+  {
+    slug: "dotcene-organy",
+    n: "",
+    title: "Dotčené orgány a podklady",
+    flow: "Druh stavby + místo → Kontrolní seznam",
+    description: "Sestaví seznam dotčených orgánů, správců a podkladů pro povolení podle druhu stavby a podmínek (voda, dráha, komunikace, bourání, azbest, kácení…).",
+    category: "project",
+    inputs: [
+      { kind: "select", id: "stage", label: "Fáze", options: [
+        { value: "povolení stavby", label: "Povolení stavby" },
+        { value: "provádění stavby", label: "Provádění stavby (uzavírky, výluky)" },
+        { value: "kolaudace / užívání", label: "Kolaudace / užívání" },
+      ] },
+      { kind: "text", id: "notes", label: "Popis stavby a zvláštní podmínky", rows: 5, placeholder: "Kácení dřevin, památková zóna, zábor ZPF, blízkost lesa…" },
+    ],
+    usesProject: true,
+    worksWithoutAi: true,
+    action: "Sestavit seznam",
+    sample: { stage: "povolení stavby", notes: "Rekonstrukce železničního mostu přes Berounku, výluka koleje, bourání ocelové NK s olovnatými nátěry, kácení 3 stromů na předmostí, dočasný zábor ZPF pro zařízení staveniště." },
+  },
+  {
+    slug: "ukoly-z-jednani",
+    n: "",
+    title: "Úkoly z jednání",
+    flow: "Přepis jednání → Úkoly po osobách",
+    description: "Z přepisu vytáhne jen úkoly – i nevyslovené závazky („pošlu zítra“) – rozdělí je podle odpovědných osob, s termíny a závislostmi. Export do Excelu.",
+    category: "office",
+    inputs: [
+      { kind: "date", id: "date", label: "Datum jednání" },
+      { kind: "text", id: "transcript", label: "Přepis nebo poznámky", rows: 10, required: true },
+      { kind: "files", id: "docs", label: "Přepis jako soubor (volitelné)", accept: ".txt,.docx,.pdf,.md", max: 3 },
+    ],
+    usesProject: true,
+    worksWithoutAi: true,
+    action: "Vytáhnout úkoly",
+    sample: { date: "2026-09-24", transcript: MEETING_TRANSCRIPT },
+  },
+  {
+    slug: "pojmenovani-souboru",
+    n: "",
+    title: "Pojmenování a třídění souborů",
+    flow: "Hromada souborů → Jednotné názvy + ZIP",
+    description: "Rozpozná typ dokumentu, objekt a revizi, navrhne názvy podle konvence, najde duplicity, starší revize a cizí soubory. Stáhne přejmenované soubory jako ZIP.",
+    category: "project",
+    inputs: [
+      { kind: "files", id: "docs", label: "Soubory", required: true, accept: `${DOC_ACCEPT},${PHOTO_ACCEPT}`, max: 50 },
+      { kind: "line", id: "project", label: "Zkratka projektu", placeholder: "MostKarlstejn" },
+      { kind: "line", id: "pattern", label: "Konvence názvů", placeholder: "{rok}_{projekt}_{objekt}_{typ}_v{rev}", hint: "Proměnné: {rok} {projekt} {objekt} {typ} {rev}" },
+    ],
+    usesProject: true,
+    worksWithoutAi: true,
+    action: "Navrhnout názvy",
+    sample: { project: "MostKarlstejn" },
+    sampleFiles: {
+      docs: [
+        { name: "tz final FINAL.txt", text: SAMPLE_TZ },
+        { name: "TZ_SO201_v12.txt", text: SAMPLE_TZ },
+        { name: "TZ_SO201_v13.txt", text: SAMPLE_TZ_V2 },
+        { name: "zov.txt", text: SAMPLE_ZOV },
+        { name: "kopie zov.txt", text: SAMPLE_ZOV },
+        { name: "rozpocet SO201.csv", text: SAMPLE_BOQ.replace(/\t/g, ";") },
+      ],
+    },
+  },
 ];
+
+
+/** Pořadí nástrojů podle kategorií; čísla se přidělují automaticky. */
+const ORDER = [
+  "extrakce-dat", "dotcene-organy", "vyhledavani", "pojmenovani-souboru", "pdf-excel",
+  "technicka-zprava", "zov", "technicka-specifikace", "stary-novy-projekt",
+  "kontrola-konzistence", "chybejici-informace", "kontrola-struktury", "porovnani-revizi", "kontrola-vykazu",
+  "katalog-nebezpeci", "technologicky-postup", "postup-bourani", "kontrolni-den", "foto-problemy", "soupis-vad", "predavaci-dokumentace",
+  "zapis-z-jednani", "ukoly-z-jednani", "email-ukol", "rfi", "korespondence", "odpoved-uradu", "pripominky", "porovnani-nabidek",
+  "copilot",
+];
+TOOLS.sort((a, b) => ORDER.indexOf(a.slug) - ORDER.indexOf(b.slug));
+TOOLS.forEach((t, i) => (t.n = String(i + 1).padStart(2, "0")));
 
 export const TOOLS_BY_SLUG = new Map(TOOLS.map((t) => [t.slug, t]));

@@ -1,4 +1,5 @@
 import "server-only";
+import { safeName } from "../claude";
 import { z } from "zod";
 import { formatCz, parseCzNumber, truncate } from "../../analyzers/text";
 import { newReport, sortFindings, type Finding, type Section, type Tone } from "../../report";
@@ -8,7 +9,7 @@ const docsBlock = (ctx: ToolContext, ...ids: string[]) =>
   ids
     .flatMap((id) => ctx.files(id))
     .filter((d) => !d.pdfBase64)
-    .map((d) => `<dokument nazev="${d.name}">\n${truncate(d.text, 60_000)}\n</dokument>`)
+    .map((d) => `<dokument nazev="${safeName(d.name)}">\n${truncate(d.text, 60_000)}\n</dokument>`)
     .join("\n");
 
 const pdfs = (ctx: ToolContext, ...ids: string[]) => ids.flatMap((id) => ctx.files(id)).filter((d) => d.pdfBase64);
@@ -55,7 +56,7 @@ export const comments: ToolHandler = async (ctx) => {
         ? "Poté ověř v REVIDOVANÉ dokumentaci, zda je požadavek zapracován: addressed (doloženo citací), partial, not_addressed, unclear (nelze posoudit z dodaných dokumentů). Stav vždy dolož krátkou citací nebo zdůvodněním."
         : "Revidovaná dokumentace nebyla dodána – stav všech požadavků je open."
     }`,
-    prompt: `PŘIPOMÍNKY:\n${src.filter((d) => !ctx.files("comments").find((f) => f.name === d.name)?.pdfBase64).map((d) => `<pripominky zdroj="${d.name}">\n${d.text}\n</pripominky>`).join("\n")}${
+    prompt: `PŘIPOMÍNKY:\n${src.filter((d) => !ctx.files("comments").find((f) => f.name === d.name)?.pdfBase64).map((d) => `<pripominky zdroj="${safeName(d.name)}">\n${d.text}\n</pripominky>`).join("\n")}${
       hasRevised ? `\n\nREVIDOVANÁ DOKUMENTACE:\n${docsBlock(ctx, "revised")}` : ""
     }`,
     docs: pdfs(ctx, "comments", "revised"),
@@ -334,7 +335,7 @@ export const bids: ToolHandler = async (ctx) => {
       "Porovnáváš nabídky ve veřejné zakázce na stavební práce / projekční služby. Pro KAŽDOU nabídku vytáhni standardizované údaje. NEVYBÍREJ vítěze a nehodnoť kvalitu – jen fakta, odchylky od zadání a chybějící údaje. Cenu uveď přesně jak je v nabídce (bez/s DPH) a číslo bez DPH do priceNumber (-1 neuvedeno). Dobu realizace v pracovních dnech do durationDays (-1 neuvedeno / nelze převést).",
     prompt: `ZADÁNÍ A KRITÉRIA:\n${ctx.value("criteria") || "neuvedeno"}\n\n${files
       .filter((d) => !d.pdfBase64)
-      .map((d) => `<nabidka soubor="${d.name}">\n${truncate(d.text, 60_000)}\n</nabidka>`)
+      .map((d) => `<nabidka soubor="${safeName(d.name)}">\n${truncate(d.text, 60_000)}\n</nabidka>`)
       .join("\n")}`,
     docs: files.filter((d) => d.pdfBase64),
     schema: z.object({
